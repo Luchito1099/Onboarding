@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOVA Operaciones — Ventas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f6f8;--surface:#fff;--surface-2:#f6f8fa;--surface-3:#eef1f4;
+    --line:#e4e8ec;--line-2:#d6dbe1;
+    --text:#1f2734;--muted:#697586;--muted-2:#98a2b3;
+    --accent:#0d9488;--accent-ink:#0f766e;--accent-soft:#e3f4f2;
+    --crit:#e11d48;--crit-soft:#fef1f3;--crit-line:#f9cdd6;
+    --imp:#d97706;--imp-soft:#fef7ec;--imp-line:#f6e0b8;
+    --ok:#0d9488;--ok-soft:#e3f4f2;
+    --info:#2563eb;--info-soft:#eef3ff;--info-line:#d3e0fb;
+    --radius:12px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+  .app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+
+  /* SIDEBAR */
+  .sidebar{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 18px}
+  .brand .mark{width:32px;height:32px;border-radius:9px;background:var(--accent);display:grid;place-items:center}
+  .brand .mark svg{width:18px;height:18px}
+  .brand .name{font-weight:800;font-size:15px;letter-spacing:-.3px;line-height:1}
+  .brand .name small{display:block;font-weight:600;font-size:9px;letter-spacing:1.5px;color:var(--muted-2);margin-top:3px;text-transform:uppercase}
+  .nav-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted-2);padding:12px 10px 6px}
+  .area-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--muted);font-weight:600;font-size:13.5px;user-select:none}
+  .area-item .ico{width:26px;height:26px;border-radius:7px;background:var(--surface-3);display:grid;place-items:center;color:var(--muted)}
+  .area-item .ico svg{width:15px;height:15px}
+  .area-item.active{background:var(--accent-soft);color:var(--accent-ink)}
+  .area-item.active .ico{background:var(--accent);color:#fff}
+  .area-item.soon{opacity:.55}.area-item.soon .tag{margin-left:auto;font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted-2);background:var(--surface-3);padding:2px 6px;border-radius:5px}
+  .side-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--line)}
+  .me{display:flex;align-items:center;gap:10px;padding:6px}
+  .me .av{width:32px;height:32px;border-radius:8px;background:var(--accent);display:grid;place-items:center;font-weight:800;color:#fff;font-size:13px}
+  .me .who b{font-size:13px;font-weight:700;display:block}
+  .me .who span{font-size:11px;color:var(--muted)}
+
+  /* MAIN */
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--line);padding:0 26px;position:sticky;top:0;z-index:20}
+  .trow{display:flex;align-items:center;gap:14px;padding:15px 0 0}
+  .trow h1{font-size:18px;font-weight:800;letter-spacing:-.3px}
+  .trow .arole{font-size:12.5px;color:var(--muted)}
+  .trow .tr-right{margin-left:auto}
+  .btn-primary{background:var(--accent);color:#fff;border:none;font-family:inherit;font-weight:700;font-size:12.5px;padding:9px 15px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:7px}
+  .btn-primary svg{width:15px;height:15px}
+  .tabs{display:flex;gap:2px;margin-top:14px;overflow-x:auto}
+  .tab{padding:11px 15px;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:8px;white-space:nowrap}
+  .tab.active{color:var(--accent-ink);border-color:var(--accent)}
+  .tab svg{width:16px;height:16px}
+
+  .body{display:grid;grid-template-columns:1fr 322px;flex:1}
+  .body.full{grid-template-columns:1fr}
+  .col-main{padding:24px 26px 60px;min-width:0;max-width:880px}
+  .rail{border-left:1px solid var(--line);background:var(--surface);padding:22px 18px;position:sticky;top:64px;height:fit-content}
+  .body.full .rail{display:none}
+  .view{display:none}.view.on{display:block;animation:fade .22s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+  .panel-head{margin-bottom:20px}
+  .panel-head h2{font-size:22px;font-weight:800;letter-spacing:-.4px}
+  .panel-head p{font-size:13.5px;color:var(--muted);margin-top:5px;max-width:620px;line-height:1.5}
+  .subh{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted-2);margin:18px 0 8px}
+
+  /* PRIORITY SUMMARY */
+  .prio-summary{display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
+  .pband{display:flex;align-items:center;gap:11px;padding:12px 16px;border-radius:10px;border:1px solid;font-size:13px}
+  .pband .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .pband .plabel{font-weight:800;letter-spacing:.4px;text-transform:uppercase;font-size:11px}
+  .pband .ptext{color:var(--muted);font-weight:500}
+  .pband .pcount{margin-left:auto;font-weight:800;font-size:15px}
+  .pband.crit{background:var(--crit-soft);border-color:var(--crit-line)}.pband.crit .dot,.pband.crit .plabel,.pband.crit .pcount{color:var(--crit)}
+  .pband.imp{background:var(--imp-soft);border-color:var(--imp-line)}.pband.imp .dot,.pband.imp .plabel,.pband.imp .pcount{color:var(--imp)}
+  .pband.reg{background:var(--ok-soft);border-color:#c7e9e5}.pband.reg .dot,.pband.reg .plabel,.pband.reg .pcount{color:var(--ok)}
+  .pband.done-all{opacity:.7}
+
+  /* RUNBOOK */
+  .rb-head{display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+  .rb-head .h{flex:1;min-width:220px}
+  .rb-head h2{font-size:22px;font-weight:800;letter-spacing:-.4px}
+  .rb-head .sub{font-size:13px;color:var(--muted);margin-top:4px}
+  .rb-head .prog{display:flex;align-items:center;gap:10px;min-width:170px}
+  .rb-head .prog .bar{flex:1;height:7px;background:var(--surface-3);border-radius:20px;overflow:hidden}
+  .rb-head .prog .bar i{display:block;height:100%;background:var(--accent);border-radius:20px;transition:width .3s}
+  .rb-head .prog .pct{font-weight:800;font-size:13px;color:var(--accent-ink)}
+  .simulate{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:14px;margin-bottom:22px}
+  .simulate .sl{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  .simulate input[type=range]{flex:1;accent-color:var(--accent);height:5px}
+  .simulate .now{font-weight:800;font-size:16px;color:var(--accent-ink);font-variant-numeric:tabular-nums;min-width:56px;text-align:right}
+  .block-label{display:flex;align-items:center;gap:10px;margin:22px 0 12px}
+  .block-label b{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .block-label .rng{font-size:11px;color:var(--muted-2);font-weight:600}
+  .block-label .ln{flex:1;height:1px;background:var(--line)}
+  .task{display:flex;gap:14px;margin-bottom:12px}
+  .task .tl{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:52px}
+  .task .tl .tt{font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+  .task .tl .tn{width:13px;height:13px;border-radius:50%;background:var(--surface);border:2px solid var(--line-2);margin-top:6px}
+  .task .tl .tline{width:2px;flex:1;background:var(--line);margin-top:2px;min-height:8px}
+  .task.done .tn{background:var(--accent);border-color:var(--accent)}
+  .task.now .tn{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+  .card{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;transition:box-shadow .15s,border-color .15s}
+  .card.now{border-color:var(--accent);box-shadow:0 4px 18px -8px rgba(13,148,136,.35)}
+  .card.done{opacity:.72}
+  .chead{display:flex;align-items:center;gap:11px;padding:14px 16px;cursor:pointer;user-select:none}
+  .chead .tag{font-size:10px;font-weight:800;letter-spacing:.5px;padding:3px 8px;border-radius:6px;background:var(--imp-soft);color:var(--imp);white-space:nowrap}
+  .chead .cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .chead .cdot.crit{background:var(--crit)}.chead .cdot.imp{background:var(--imp)}.chead .cdot.reg{background:var(--ok)}
+  .chead .ct{flex:1;font-weight:700;font-size:15px;letter-spacing:-.2px}
+  .chead .ct .cdur{font-weight:500;color:var(--muted-2);font-size:12px;margin-left:8px}
+  .chead .nowpill{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--accent-ink);background:var(--accent-soft);padding:3px 9px;border-radius:20px}
+  .chead .chev{color:var(--muted-2);transition:transform .2s}.chead .chev svg{width:18px;height:18px}
+  .card.open .chev{transform:rotate(180deg)}
+  .card.done .chead .ct{text-decoration:line-through;text-decoration-color:var(--muted-2)}
+  .cbody{max-height:0;overflow:hidden;transition:max-height .3s ease}
+  .card.open .cbody{max-height:1600px}
+  .cbody .inner{padding:0 16px 16px}
+  .cdesc{font-size:13.5px;color:var(--muted);line-height:1.55;padding-top:2px}
+  .steps{display:flex;flex-direction:column;gap:8px}
+  .step{display:flex;align-items:center;gap:11px;font-size:13.5px}
+  .step .sn{width:22px;height:22px;border-radius:6px;background:var(--surface-3);color:var(--muted);font-weight:800;font-size:11px;display:grid;place-items:center;flex-shrink:0}
+  .tips{display:flex;flex-direction:column;gap:7px}
+  .tip{font-size:12.5px;line-height:1.5;padding:9px 12px;border-radius:8px;border:1px solid}
+  .tip.info{background:var(--info-soft);border-color:var(--info-line);color:#1e40af}
+  .tip.warn{background:var(--imp-soft);border-color:var(--imp-line);color:#92590a}
+  .tip.alert{background:var(--crit-soft);border-color:var(--crit-line);color:#a4123a}
+  .cactions{display:flex;gap:9px;margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+  .btn-done{background:var(--accent);color:#fff;border:none;font-family:inherit;font-weight:700;font-size:12.5px;padding:9px 15px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:7px}
+  .btn-done svg{width:15px;height:15px}
+  .card.done .btn-done{background:var(--surface-3);color:var(--muted)}
+  .btn-edit{background:var(--surface);color:var(--muted);border:1px solid var(--line-2);font-family:inherit;font-weight:700;font-size:12.5px;padding:9px 15px;border-radius:9px;cursor:pointer}
+
+  /* RAIL */
+  .turno{background:linear-gradient(150deg,var(--accent-soft),#fff);border:1px solid #c7e9e5;border-radius:12px;padding:16px;margin-bottom:20px}
+  .turno .tl{font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--accent-ink)}
+  .turno .th{font-size:30px;font-weight:800;letter-spacing:-1px;color:var(--accent-ink);margin:6px 0 8px;font-variant-numeric:tabular-nums}
+  .turno .tt{font-size:14px;font-weight:700;line-height:1.25}
+  .turno .tp{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin-top:8px;font-weight:600}
+  .turno .tp .d{width:7px;height:7px;border-radius:50%}
+  .rail-label{font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted-2);margin-bottom:10px}
+  .rtask{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer}
+  .rtask:hover{background:var(--surface-2)}
+  .rtask.active{background:var(--accent-soft)}
+  .rtask .rk{width:9px;height:9px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0}
+  .rtask.done .rk{background:var(--accent);border-color:var(--accent)}.rtask.active .rk{border-color:var(--accent)}
+  .rtask .rtime{font-size:11.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;width:38px;flex-shrink:0}
+  .rtask .rname{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rtask.active .rname{color:var(--accent-ink)}
+
+  /* PROCESO */
+  .proc{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:11px;overflow:hidden}
+  .proc-head{display:flex;align-items:center;gap:12px;padding:15px 16px;cursor:pointer}
+  .proc-head .pi{width:36px;height:36px;border-radius:9px;background:var(--accent-soft);display:grid;place-items:center;flex-shrink:0;color:var(--accent-ink)}
+  .proc-head .pi svg{width:18px;height:18px}
+  .proc-head .pt b{font-size:14.5px;font-weight:700;display:block}
+  .proc-head .pt span{font-size:11.5px;color:var(--muted)}
+  .proc-head .chev{margin-left:auto;color:var(--muted-2);transition:transform .2s}.proc-head .chev svg{width:18px;height:18px}
+  .proc.open .chev{transform:rotate(180deg)}
+  .proc-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
+  .proc.open .proc-body{max-height:900px}
+  .proc-body .pin{padding:0 16px 16px}
+
+  /* FICHAS: GRID */
+  .prod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .prod-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
+  .prod-card:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .prod-cover{height:130px;background:linear-gradient(135deg,#e7ecf1,#dbe2e9);display:grid;place-items:center;color:var(--muted-2);position:relative}
+  .prod-cover svg{width:38px;height:38px}
+  .prod-cover .brandtag{position:absolute;top:10px;left:10px;background:rgba(31,39,52,.8);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px}
+  .prod-b{padding:14px}
+  .prod-b h4{font-size:15px;font-weight:700;letter-spacing:-.2px;line-height:1.2}
+  .prod-b .price{font-size:14px;font-weight:800;color:var(--accent-ink);margin-top:6px}
+  .prod-b .meta{display:flex;gap:12px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+  .prod-b .meta span{display:flex;align-items:center;gap:5px}
+  .prod-b .meta svg{width:13px;height:13px}
+
+  /* FICHAS: DETAIL */
+  .back{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px}
+  .back:hover{color:var(--accent-ink)}.back svg{width:16px;height:16px}
+  .ficha-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+  .ficha-head .btag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--accent-ink);background:var(--accent-soft);padding:3px 9px;border-radius:6px;margin-bottom:8px}
+  .ficha-head h2{font-size:23px;font-weight:800;letter-spacing:-.4px;line-height:1.1}
+  .ficha-head .price{font-size:16px;font-weight:800;color:var(--accent-ink);margin-top:6px}
+  .ficha-head .btn-edit{margin-left:auto}
+
+  /* MEDIA */
+  .media{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px}
+  .media-tabs{display:flex;gap:4px;margin-bottom:14px}
+  .mtab{font-size:12.5px;font-weight:700;color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer}
+  .mtab.on{background:var(--accent-soft);color:var(--accent-ink)}
+  .mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .mtile{aspect-ratio:1;border-radius:10px;overflow:hidden;position:relative;background:linear-gradient(135deg,#e7ecf1,#dbe2e9);display:grid;place-items:center}
+  .mtile .mic{color:var(--muted-2)}.mtile .mic svg{width:24px;height:24px}
+  .mtile .mname{position:absolute;bottom:0;left:0;right:0;background:rgba(31,39,52,.7);color:#fff;font-size:9px;font-weight:600;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mtile.vid .play{width:34px;height:34px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  .mtile.vid .play svg{width:14px;height:14px;color:var(--accent-ink)}
+  .mtile .dur{position:absolute;top:6px;right:6px;background:rgba(31,39,52,.8);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px}
+  .mtile .del{position:absolute;top:5px;left:5px;width:20px;height:20px;border-radius:6px;background:rgba(31,39,52,.7);display:none;place-items:center;cursor:pointer}
+  .mtile:hover .del{display:grid}
+  .mtile .del svg{width:11px;height:11px;color:#fff}
+  .mdrop{aspect-ratio:1;border:1.5px dashed var(--line-2);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:var(--muted);transition:.15s;text-align:center;padding:6px}
+  .mdrop:hover,.mdrop.drag{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+  .mdrop svg{width:22px;height:22px}
+  .mdrop span{font-size:10.5px;font-weight:700;line-height:1.2}
+
+  /* FICHA SECTIONS */
+  .fcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+  .fcard h3{font-size:14px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:9px}
+  .fcard h3 svg{width:17px;height:17px;color:var(--accent-ink)}
+  .fdesc{font-size:13.5px;color:var(--muted);line-height:1.6}
+  .packs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .pack{border:1px solid var(--line-2);border-radius:10px;padding:11px 16px;position:relative;flex:1;min-width:120px}
+  .pack.best{border-color:var(--accent)}
+  .pack .pq{font-size:12px;color:var(--muted);font-weight:600}
+  .pack .pp{font-size:18px;font-weight:800;margin-top:2px}
+  .pack .pbadge{position:absolute;top:-8px;left:12px;background:var(--accent);color:#fff;font-size:9px;font-weight:800;text-transform:uppercase;padding:2px 7px;border-radius:5px}
+  .benefit{display:flex;align-items:center;gap:11px;font-size:13.5px;padding:7px 0}
+  .benefit .bk{width:22px;height:22px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;flex-shrink:0}
+  .benefit .bk svg{width:13px;height:13px}
+  .spec{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .spec:last-child{border-bottom:none}
+  .spec .sk{color:var(--muted);font-weight:600}
+  .spec .sv{font-weight:700}
+  .obj{border:1px solid var(--line);border-radius:10px;margin-bottom:9px;overflow:hidden}
+  .obj-q{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;font-weight:700;font-size:13.5px}
+  .obj-q .qm{width:24px;height:24px;border-radius:7px;background:var(--crit-soft);color:var(--crit);display:grid;place-items:center;flex-shrink:0;font-weight:800;font-size:13px}
+  .obj-q .chev{margin-left:auto;color:var(--muted-2);transition:transform .2s}.obj-q .chev svg{width:16px;height:16px}
+  .obj.open .chev{transform:rotate(180deg)}
+  .obj-a{max-height:0;overflow:hidden;transition:max-height .25s ease;background:var(--surface-2)}
+  .obj.open .obj-a{max-height:220px}
+  .obj-a .ain{padding:12px 14px 12px 48px;font-size:13.5px;line-height:1.55;color:var(--text)}
+  .obj-a .ain::before{content:"→ ";color:var(--accent-ink);font-weight:800}
+  .argu{background:var(--accent-soft);border:1px solid #c7e9e5;border-radius:10px;padding:14px;font-size:13.5px;line-height:1.55;color:var(--text)}
+
+  .tab .new{font-size:9px;font-weight:800;text-transform:uppercase;color:#fff;background:var(--accent);padding:2px 6px;border-radius:5px}
+  .section-title{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted-2);margin:24px 0 12px;display:flex;align-items:center;gap:8px}
+  .section-title svg{width:15px;height:15px}
+
+  /* ONBOARDING */
+  .admin-banner{display:flex;align-items:center;gap:12px;background:var(--imp-soft);border:1px solid var(--imp-line);border-radius:10px;padding:12px 15px;margin-bottom:20px;font-size:13px}
+  .admin-banner svg{width:18px;height:18px;color:var(--imp);flex-shrink:0}
+  .admin-banner b{color:#92590a}.admin-banner .hint{color:var(--muted)}
+  .admin-banner.clear{background:var(--accent-soft);border-color:#c7e9e5}.admin-banner.clear svg,.admin-banner.clear b{color:var(--accent-ink)}
+  .video-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:12px}
+  .vc-top{display:flex;gap:14px;padding:14px}
+  .vc-thumb{width:150px;height:90px;border-radius:9px;flex-shrink:0;position:relative;display:grid;place-items:center;background:linear-gradient(135deg,#e7ecf1,#dbe2e9);overflow:hidden}
+  .vc-thumb .pl{width:40px;height:40px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 3px 12px rgba(0,0,0,.12)}
+  .vc-thumb .pl svg{width:16px;height:16px;color:var(--accent-ink)}
+  .vc-thumb.pending{background:repeating-linear-gradient(45deg,#eef1f4,#eef1f4 9px,#e6eaef 9px,#e6eaef 18px)}
+  .vc-thumb .cam{color:var(--muted-2)}.vc-thumb .cam svg{width:26px;height:26px}
+  .vc-thumb .dur{position:absolute;bottom:6px;right:6px;background:rgba(31,39,52,.82);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px}
+  .vc-info{flex:1;min-width:0}
+  .vc-info .vnum{font-size:11px;font-weight:800;color:var(--muted-2)}
+  .vc-info h4{font-size:15px;font-weight:700;letter-spacing:-.2px;margin:3px 0 5px}
+  .vc-info .vtype{font-size:12px;color:var(--muted)}
+  .vc-status{font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 9px;border-radius:20px;align-self:flex-start}
+  .vc-status.ready{background:var(--accent-soft);color:var(--accent-ink)}
+  .vc-status.pending{background:var(--imp-soft);color:var(--imp)}
+  .vc-guion{border-top:1px solid var(--line);background:var(--surface-2)}
+  .vc-guion .gtoggle{padding:11px 14px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none}
+  .vc-guion .gtoggle svg{width:14px;height:14px}
+  .vc-guion .gtoggle .chev{margin-left:auto;transition:transform .2s}
+  .video-card.gopen .gtoggle .chev{transform:rotate(180deg)}
+  .vc-guion .gbody{max-height:0;overflow:hidden;transition:max-height .28s ease}
+  .video-card.gopen .gbody{max-height:500px}
+  .vc-guion .gin{padding:0 14px 14px}
+  .vc-guion .gin p{font-size:13px;line-height:1.6}
+  .vc-guion .gin .glabel{font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--accent-ink);margin-bottom:6px}
+  .vc-save{display:flex;gap:8px;margin-top:12px}
+  .vc-save input{flex:1;border:1px solid var(--line-2);border-radius:8px;padding:8px 11px;font-family:inherit;font-size:12.5px;outline:none}
+  .vc-save input:focus{border-color:var(--accent)}
+  .vc-save button{background:var(--text);color:#fff;border:none;font-weight:700;font-size:12px;padding:0 15px;border-radius:8px;cursor:pointer}
+  .day-group{margin-bottom:18px}
+  .day-h{font-size:13px;font-weight:800;color:var(--accent-ink);margin-bottom:9px}
+  .day-h .db{background:var(--accent-soft);color:var(--accent-ink);font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px}
+  .check{display:flex;align-items:center;gap:13px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin-bottom:8px;cursor:pointer}
+  .check .box{width:21px;height:21px;border-radius:6px;border:2px solid var(--line-2);flex-shrink:0;display:grid;place-items:center;transition:.15s}
+  .check .box svg{width:12px;height:12px;opacity:0}
+  .check.done .box{background:var(--accent);border-color:var(--accent)}.check.done .box svg{opacity:1}
+  .check .ct{font-size:13.5px;font-weight:600}
+  .check.done .ct{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--muted-2)}
+
+  /* PROCESO VIDEO */
+  .proc-head .vflag{font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:20px;margin-right:6px}
+  .proc-head .vflag.has{background:var(--accent-soft);color:var(--accent-ink)}
+  .proc-head .vflag.no{background:var(--surface-3);color:var(--muted-2)}
+  .vid-embed{margin-top:12px;border-radius:10px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/9;background:#000;display:none}
+  .vid-embed.show{display:block}
+  .vid-embed iframe{width:100%;height:100%;border:0;display:block}
+  .vid-add{display:flex;gap:8px;margin-top:12px}
+  .vid-add input{flex:1;border:1px solid var(--line-2);border-radius:8px;padding:9px 12px;font-family:inherit;font-size:12.5px;outline:none}
+  .vid-add input:focus{border-color:var(--accent)}
+  .vid-add button{background:var(--accent);color:#fff;border:none;font-weight:700;font-size:12.5px;padding:0 16px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .vid-add button svg{width:14px;height:14px}
+
+  /* FICHA MEDIA HINT */
+  .mhint{font-size:11.5px;color:var(--muted);margin-bottom:12px;display:none}.mhint.show{display:block}
+
+  /* EJEMPLOS */
+  .ej-filters{display:flex;gap:7px;margin-bottom:18px;flex-wrap:wrap}
+  .ejf{background:var(--surface);border:1px solid var(--line);color:var(--muted);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .ejf.active{background:var(--text);color:#fff;border-color:var(--text)}.ejf svg{width:14px;height:14px}
+  .ej-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .ej-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
+  .ej-card:hover{transform:translateY(-3px);border-color:var(--line-2)}
+  .ej-cover{height:120px;position:relative;display:grid;place-items:center}
+  .ej-cover.chat{background:linear-gradient(135deg,#dcfce7,#bbf7d0)}
+  .ej-cover.call{background:linear-gradient(135deg,#dbeafe,#bfdbfe)}
+  .ej-cover .big{width:46px;height:46px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 3px 12px rgba(0,0,0,.12)}
+  .ej-cover .big svg{width:22px;height:22px}
+  .ej-cover.chat .big svg{color:#16a34a}.ej-cover.call .big svg{color:#2563eb}
+  .ej-cover .kind{position:absolute;top:10px;left:10px;font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.85)}
+  .ej-cover.chat .kind{color:#16a34a}.ej-cover.call .kind{color:#2563eb}
+  .ej-cover .dur{position:absolute;bottom:10px;right:10px;background:rgba(31,39,52,.8);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px}
+  .ej-b{padding:14px}.ej-b h4{font-size:14.5px;font-weight:700;letter-spacing:-.2px}
+  .ej-b p{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .ej-b .obj-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--imp);background:var(--imp-soft);padding:3px 8px;border-radius:6px;margin-top:9px}
+
+  /* MODAL */
+  .modal{position:fixed;inset:0;background:rgba(15,23,32,.55);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .modal.show{display:flex}
+  .modal-box{background:var(--surface);border-radius:16px;max-width:440px;width:100%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;animation:pop .2s ease}
+  @keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal-head{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .modal-head .mi{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex-shrink:0;color:#fff}
+  .modal-head .mi svg{width:17px;height:17px}
+  .modal-head b{font-size:14.5px;font-weight:700}.modal-head span{font-size:11.5px;color:var(--muted);display:block}
+  .modal-head .close{margin-left:auto;width:30px;height:30px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;cursor:pointer;color:var(--muted)}
+  .modal-head .close svg{width:15px;height:15px}
+  .modal-body{overflow-y:auto;padding:16px}
+  .chatlog{background:#e9edf0;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+  .bub{max-width:82%;font-size:13px;line-height:1.45;padding:8px 11px;border-radius:12px}
+  .bub.in{background:#fff;align-self:flex-start;border-top-left-radius:3px}
+  .bub.out{background:#d7f2c9;align-self:flex-end;border-top-right-radius:3px}
+  .bub .who{font-size:9.5px;font-weight:800;text-transform:uppercase;opacity:.5;margin-bottom:2px}
+  .callplayer{text-align:center;padding:14px 0}
+  .callplayer .disc{width:80px;height:80px;border-radius:50%;background:var(--info-soft);display:grid;place-items:center;margin:0 auto 14px}
+  .callplayer .disc svg{width:34px;height:34px;color:var(--info)}
+  .callplayer .wave{display:flex;align-items:center;justify-content:center;gap:3px;height:40px;margin:14px 0}
+  .callplayer .wave i{width:3px;background:var(--info);border-radius:3px;animation:wv 1s ease-in-out infinite}
+  @keyframes wv{0%,100%{height:8px}50%{height:34px}}
+  .callplayer .pbar{height:5px;background:var(--surface-3);border-radius:20px;margin:0 auto;max-width:280px;overflow:hidden}
+  .callplayer .pbar i{display:block;height:100%;width:35%;background:var(--info);border-radius:20px}
+  .callplayer .ptime{font-size:12px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
+  .callplayer .note{font-size:12px;color:var(--muted);margin-top:16px;background:var(--surface-2);border-radius:10px;padding:12px;line-height:1.5;text-align:left}
+  .learn{margin-top:16px;background:var(--accent-soft);border:1px solid #c7e9e5;border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.5}
+  .learn b{color:var(--accent-ink)}
+
+  @media(max-width:1080px){.body{grid-template-columns:1fr}.rail{display:none}.prod-grid{grid-template-columns:repeat(2,1fr)}.ej-grid{grid-template-columns:1fr}}
+  @media(max-width:720px){.app{grid-template-columns:1fr}.sidebar{display:none}.col-main{padding:18px 16px}.prod-grid{grid-template-columns:1fr}.mgrid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand"><div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V6l8 5 8-5v13"/><path d="M4 19h16"/></svg></div><div class="name">NOVA<small>Operaciones</small></div></div>
+    <div class="nav-label">Áreas del negocio</div>
+    <div class="area-item active"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5M3 9h18v11H3zM3 9v11M8 13h8"/></svg></div>Ventas COD</div>
+    <div class="area-item soon"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg></div>Confirmaciones<span class="tag">Pronto</span></div>
+    <div class="area-item soon"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h11v10H2zM13 10h4l4 4v3h-8z"/></svg></div>Logística<span class="tag">Pronto</span></div>
+    <div class="side-foot"><div class="me"><div class="av">L</div><div class="who"><b>Luchito</b><span>Administrador</span></div></div></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="trow"><div><h1>Ventas COD</h1><div class="arole">Guía operativa de la vendedora</div></div>
+        <div class="tr-right"><button class="btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Agregar</button></div></div>
+      <div class="tabs">
+        <div class="tab" data-tab="onboarding"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M6 10v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/></svg>Onboarding</div>
+        <div class="tab active" data-tab="runbook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M8 14h5"/></svg>Runbook diario</div>
+        <div class="tab" data-tab="procesos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Procesos</div>
+        <div class="tab" data-tab="fichas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5M3 9h18v11H3zM3 9v11"/></svg>Fichas de producto</div>
+        <div class="tab" data-tab="ejemplos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>Ejemplos reales <span class="new">Nuevo</span></div>
+      </div>
+    </div>
+
+    <div class="body" id="bodyGrid">
+      <div class="col-main">
+
+        <!-- ===== RUNBOOK ===== -->
+        <!-- ===== ONBOARDING ===== -->
+        <section class="view" id="view-onboarding">
+          <div class="panel-head"><h2>Onboarding de ventas</h2><p>Todo lo que una vendedora nueva necesita para operar sola en 3 días. Los videos se ven el día 1; el runbook la guía desde el día 3.</p></div>
+          <div class="admin-banner" id="videoBanner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg><div><b>Para ti (Luchito):</b> <span class="hint">tienes <b id="pendingCount">6</b> videos por grabar. Cada uno trae su guion — pega el link cuando lo grabes.</span></div></div>
+          <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg> Videos de lanzamiento — se ven en orden</div>
+          <div id="videoList"></div>
+          <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Checklist de primeros días</div>
+          <div id="checklist"></div>
+        </section>
+
+        <section class="view on" id="view-runbook">
+          <div class="prio-summary" id="prioSummary"></div>
+          <div class="rb-head"><div class="h"><h2>Runbook diario</h2><div class="sub" id="rbSub"></div></div>
+            <div class="prog"><div class="bar"><i id="progBar" style="width:0%"></i></div><span class="pct" id="progPct">0%</span></div></div>
+          <div class="simulate"><span class="sl">Simular hora</span><input type="range" id="simRange" min="480" max="720" step="5" value="540"><span class="now" id="simNow">09:00</span></div>
+          <div id="timeline"></div>
+        </section>
+
+        <!-- ===== PROCESOS ===== -->
+        <section class="view" id="view-procesos">
+          <div class="panel-head"><h2>Procesos de ventas</h2><p>La guía paso a paso de cada proceso, con sus tips. Se consulta cuando surge la situación.</p></div>
+          <div id="procList"></div>
+        </section>
+
+        <!-- ===== FICHAS ===== -->
+        <section class="view" id="view-fichas">
+          <div id="fichasGrid">
+            <div class="panel-head"><h2>Fichas de producto</h2><p>Toda la info para vender cada producto: fotos, <b>videos que explican el producto</b>, beneficios y cómo responder objeciones.</p></div>
+            <div class="prod-grid" id="prodGrid"></div>
+          </div>
+          <div id="fichaDetail" style="display:none"></div>
+        </section>
+
+        <!-- ===== EJEMPLOS REALES ===== -->
+        <section class="view" id="view-ejemplos">
+          <div class="panel-head"><h2>Ejemplos reales de clientes</h2><p>Conversaciones y llamadas reales para que veas y escuches cómo se maneja cada caso. Observa el tono, el ritmo y cómo se resuelven las objeciones.</p></div>
+          <div class="ej-filters" id="ejFilters">
+            <div class="ejf active" data-f="all">Todos</div>
+            <div class="ejf" data-f="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Chat WhatsApp</div>
+            <div class="ejf" data-f="call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg> Llamadas</div>
+          </div>
+          <div class="ej-grid" id="ejGrid"></div>
+        </section>
+
+      </div>
+
+      <aside class="rail" id="rail">
+        <div class="turno"><div class="tl">Turno activo</div><div class="th" id="turnoTime">08:50</div><div class="tt" id="turnoTask">—</div><div class="tp"><span class="d" id="turnoDot"></span><span id="turnoPrio"></span></div></div>
+        <div class="rail-label">Tareas del día</div>
+        <div id="railTasks"></div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- MODAL EJEMPLOS -->
+<div class="modal" id="modal"><div class="modal-box"><div id="modalContent"></div></div></div>
+
+<script>
+/* ================= DATA ================= */
+const TASKS=[
+  {time:'08:45',block:'Apertura',range:'08:45–08:50',tag:'PEDIDOS',prio:'crit',dur:'5 min',
+   title:'Enviar mensaje predeterminado de pedidos',
+   desc:'Enviar el mensaje predeterminado de todos los pedidos que falten de Shopify (web) a WhatsApp. Suelen ser los de la madrugada y del mismo día. Toma de 1 a 5 min según la cantidad.',
+   steps:['Abrir Telegram','Hacer clic o copiar el mensaje predeterminado','Enviar el mensaje al WhatsApp del cliente'],
+   tips:[
+     {t:'info',x:'Si el pedido es de Lima y está dentro de la cobertura de FenFung, indicar entrega el mismo día — siempre que entre antes de las 10:50 am.'},
+     {t:'warn',x:'Si hay varios pedidos de Lima para el mismo día sin registrar, hacerlo con 30–40 min de anticipación al cierre de Delivery Normal FenFung (cierra 11:00 am).'},
+     {t:'alert',x:'Pedidos de Lima del mismo día o del día anterior sin registrar: máximo hasta las 10:55 am. A las 11:00 am se cierra el sistema de Delivery Normal.'}
+   ],done:false},
+  {time:'08:50',block:'Apertura',range:'08:50–09:10',tag:'SEGUIMIENTO',prio:'crit',dur:'20 min',
+   title:'Etiquetado & seguimiento de pedidos',
+   desc:'Etiquetar cada pedido según su estado y dar seguimiento a los pendientes de confirmar o de despacho.',
+   steps:['Revisar la bandeja de pedidos nuevos','Etiquetar por estado (nuevo / confirmado / despachado)','Marcar los que requieren seguimiento hoy'],
+   tips:[{t:'info',x:'Usa siempre la misma etiqueta por estado para no romper el filtro del CRM.'}],done:false},
+  {time:'09:10',block:'Mañana',range:'09:10–10:30',tag:'CONFIRMAR',prio:'imp',dur:'80 min',
+   title:'Confirmar pedidos por WhatsApp',
+   desc:'Escribir o llamar a los leads del día para confirmar pedido, dirección y talla antes del despacho.',
+   steps:['Abrir el embudo de confirmaciones','Confirmar datos y talla del cliente','Mover a "confirmado" o "cliente falla"'],
+   tips:[{t:'warn',x:'La talla se confirma SIEMPRE por WhatsApp, nunca se asume.'},{t:'alert',x:'Si el cliente ya falló 2+ entregas, exigir prepago total antes de despachar.'}],done:false},
+  {time:'10:40',block:'Cierre delivery',range:'10:40–11:00',tag:'DESPACHO',prio:'crit',dur:'20 min',
+   title:'Registrar pedidos antes del cierre FenFung',
+   desc:'Registrar en Delivery Normal todos los pedidos de Lima confirmados antes de que cierre a las 11:00 am.',
+   steps:['Filtrar pedidos de Lima confirmados','Registrar en el sistema de Delivery Normal','Verificar que quedaron todos antes de las 11:00 am'],
+   tips:[{t:'alert',x:'11:00 am es el corte duro. Nada entra después.'}],done:false}
+];
+
+const VIDEOS=[
+  {n:1,title:'Bienvenida + cómo funciona el COD y tu rol',type:'Tú hablando a cámara',dur:'5:00',guion:'Preséntate y explica qué vendemos, qué es el pago contra entrega (COD) y por qué la vendedora es la pieza que hace que el pedido llegue y se cobre. Cierra con la actitud que esperas: rapidez, orden y honestidad.'},
+  {n:2,title:'Tour de tus herramientas',type:'Grabación de pantalla',dur:'6:00',guion:'Muestra en pantalla, en un recorrido: Shopify, Telegram, WhatsApp, el CRM y el sistema de Delivery Normal. Solo el panorama; el detalle va en cada proceso.'},
+  {n:3,title:'Enviar el mensaje predeterminado Shopify → WhatsApp',type:'Grabación de pantalla',dur:'2:00',guion:'Haz el proceso real una vez: abre Telegram, copia el predeterminado y envíalo. Narra en voz alta. No edites.'},
+  {n:4,title:'Confirmar pedido y talla por WhatsApp',type:'Grabación de pantalla',dur:'3:00',guion:'Muestra cómo confirmas datos, dirección y talla, y cómo mueves el pedido a "confirmado". Recalca que la talla nunca se asume.'},
+  {n:5,title:'Registrar en Delivery Normal antes del cierre FenFung',type:'Grabación de pantalla',dur:'3:00',guion:'Muestra cómo filtras y registras los pedidos de Lima. Insiste en el corte de las 11:00 am.'},
+  {n:6,title:'Etiquetar y dar seguimiento',type:'Grabación de pantalla',dur:'2:00',guion:'Muestra cómo etiquetas por estado y marcas los que necesitan seguimiento.'}
+];
+const CHECKLIST=[
+  {day:'Día 1',items:['Ver los 6 videos de lanzamiento en orden','Tener accesos: WhatsApp, Telegram, Shopify, CRM y Delivery Normal','Ver los ejemplos reales de chats y llamadas']},
+  {day:'Día 2',items:['Acompañar y observar una mañana real completa','Registrar 3 pedidos reales con apoyo']},
+  {day:'Día 3',items:['Operar sola con el Runbook diario abierto','Cerrar el día con revisión rápida']}
+];
+const EJEMPLOS=[
+  {kind:'chat',title:'Cliente dice "está caro"',obj:'Objeción: precio',dur:'6 mensajes',desc:'Cómo bajar el precio percibido usando el pago contra entrega.',
+   chat:[{s:'in',w:'Cliente',t:'Hola, me interesa la tobillera pero está un poco cara 😅'},{s:'out',w:'Vendedora',t:'¡Hola! Te entiendo 🙌 Justo lo bueno es que es pago contra entrega: pagas recién cuando lo recibes en tu puerta, sin riesgo.'},{s:'in',w:'Cliente',t:'Ah no sabía que era contra entrega'},{s:'out',w:'Vendedora',t:'Así es 👍 Y si llevas el pack de 2 te sale más económico por unidad. ¿Te muestro?'},{s:'in',w:'Cliente',t:'Ya pues, muéstrame el de 2'},{s:'out',w:'Vendedora',t:'Perfecto, el pack de 2 queda en S/99 con envío. ¿A qué distrito te lo envío?'}],
+   learn:'Nunca defiendas el precio de frente. Cambia el foco al <b>pago contra entrega</b> (baja el riesgo) y ofrece el pack como alternativa, no como presión.'},
+  {kind:'chat',title:'Cliente dice "lo voy a pensar"',obj:'Objeción: duda',dur:'5 mensajes',desc:'Cómo descubrir la objeción real sin presionar.',
+   chat:[{s:'in',w:'Cliente',t:'Gracias, lo voy a pensar'},{s:'out',w:'Vendedora',t:'¡Claro! Solo para ayudarte mejor 😊 ¿Qué es lo que te hace dudar — la talla, el precio o el envío?'},{s:'in',w:'Cliente',t:'Más que nada si me va a quedar'},{s:'out',w:'Vendedora',t:'Tranquila, es talla única ajustable, se adapta a la mayoría de tallas de tobillo. Si usas zapato normal, te va a quedar bien 👍'},{s:'in',w:'Cliente',t:'Ah ya, entonces sí, mándamelo'}],
+   learn:'"Lo voy a pensar" casi nunca es un no. Pregunta <b>qué le hace dudar</b> y resuelve esa duda puntual. Aquí era la talla, no el precio.'},
+  {kind:'call',title:'Confirmación de pedido de Lima',obj:'Proceso: confirmar',dur:'2:14',desc:'Llamada modelo para confirmar dirección y talla con buen tono.',
+   note:'Escucha cómo la vendedora confirma nombre, dirección con referencia y talla, sin apurar al cliente. Mantiene un tono cálido y cierra confirmando el horario de entrega.',
+   learn:'El ritmo importa: da tiempo a que el cliente responda, repite la dirección para confirmar, y cierra siempre con el <b>siguiente paso claro</b> (cuándo llega).'},
+  {kind:'call',title:'Cliente de provincia duda del adelanto',obj:'Objeción: desconfianza',dur:'3:02',desc:'Cómo explicar el adelanto de S/30 generando confianza.',
+   note:'La vendedora explica que el adelanto se descuenta del total y que apenas paga se le envía el número de seguimiento del courier. Ofrece mandar captura de otros envíos entregados.',
+   learn:'Ante la desconfianza, da <b>pruebas y control</b>: el seguimiento del courier y ejemplos de entregas anteriores. El adelanto deja de sentirse como riesgo.'}
+];
+function ytId(url){const m=url.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/);return m?m[1]:null;}
+
+const PROCESOS=[
+  {n:'Enviar mensaje predeterminado Shopify → WhatsApp',when:'Apertura · cada mañana',video:'',
+   steps:['Abrir Telegram','Copiar el mensaje predeterminado','Enviar al WhatsApp del cliente','Registrar el envío'],
+   tips:[{t:'info',x:'Prioriza los pedidos de Lima del mismo día por el corte de las 11:00 am.'}]},
+  {n:'Confirmar pedido y talla por WhatsApp',when:'En cada confirmación',
+   steps:['Contactar por WhatsApp','Confirmar nombre, dirección y distrito','Confirmar la talla exacta','Mover a "confirmado"'],
+   tips:[{t:'warn',x:'La talla se confirma siempre, nunca se asume.'}]},
+  {n:'Manejo de "cliente falla" (prepago)',when:'Cliente con 2+ entregas fallidas',
+   steps:['Marcar el campo "prepago requerido"','Solicitar el adelanto del total','No despachar hasta registrar el pago'],
+   tips:[{t:'alert',x:'2 entregas fallidas acumuladas = prepago total, sin excepción.'}]},
+  {n:'Registrar pedido de Lima en Delivery Normal (FenFung)',when:'Pedidos de Lima · antes de 11:00 am',
+   steps:['Filtrar Lima confirmados','Ingresar los datos en el sistema','Confirmar que el registro fue exitoso'],
+   tips:[{t:'alert',x:'Corte duro 11:00 am. Registra con anticipación.'}]},
+  {n:'Enviar pedido de provincia (adelanto S/30)',when:'Todo pedido de provincia',
+   steps:['Informar el adelanto de S/30','Registrar el pago del adelanto','Generar guía del courier','Enviar el número de seguimiento'],
+   tips:[{t:'warn',x:'Sin adelanto confirmado no se genera la guía.'}]},
+  {n:'Etiquetar y dar seguimiento',when:'Apertura y durante el día',
+   steps:['Revisar pedidos nuevos','Etiquetar por estado','Marcar los que requieren seguimiento hoy'],
+   tips:[{t:'info',x:'Misma etiqueta por estado = filtros del CRM intactos.'}]}
+];
+
+const PRODUCTS=[
+  {id:'tobillera',name:'Tobillera de compresión NOVAFLEX®',brand:'NOVAFLEX®',price:'S/69 – S/129',
+   media:{images:[{n:'tobillera-frente.jpg'},{n:'tobillera-uso.jpg'}],videos:[{n:'como-usar-la-tobillera.mp4',dur:'1:20'}]},
+   desc:'Soporte de compresión para el tobillo que da estabilidad y firmeza sin limitar el movimiento. Se usa entrenando, trabajando de pie o en la rutina diaria.',
+   packs:[{q:'1 unidad',p:'S/69'},{q:'2 unidades',p:'S/99',best:true},{q:'3 unidades',p:'S/129'}],
+   beneficios:['Mayor estabilidad en cada movimiento','Ultra ligera — solo 1 mm, no abulta','Se lleva bajo cualquier calzado','Talla única ajustable','Tejido transpirable, no irrita'],
+   specs:[{k:'Grosor',v:'1 mm'},{k:'Material',v:'Tejido elástico transpirable con panel de compresión'},{k:'Talla',v:'Única ajustable'},{k:'Colores',v:'Negro/gris · Negro/verde'}],
+   objeciones:[
+     {o:'Está muy caro',r:'Recuérdale que es pago contra entrega: paga recién al recibir, sin riesgo. Y en pack de 2 o 3, el precio por unidad baja bastante.'},
+     {o:'No sé si me quede bien',r:'Es talla única ajustable, se adapta a la mayoría de tallas de pie/tobillo. Si usa calzado normal, le va a quedar.'},
+     {o:'¿Aprieta demasiado?',r:'Da compresión firme pero ajustable; no corta la circulación. Se siente como soporte, no como una venda apretada.'},
+     {o:'Lo voy a pensar',r:'No presiones. Pregunta: "¿Qué te hace dudar — la talla, el precio o el envío?" y resuelve esa duda puntual.'},
+     {o:'¿Sirve para hacer deporte?',r:'Sí, ideal para correr, fútbol, básquet y cualquier actividad de impacto. Da soporte sin limitar el movimiento.'}
+   ],
+   argumentos:'Vende el resultado, no el producto: "vuelve a moverte con seguridad". Enfócate en soporte, estabilidad y firmeza — nunca prometas curar lesiones ni uses "protección médica".'},
+  {id:'rodillera',name:'Rodillera de soporte NOVAFLEX®',brand:'NOVAFLEX®',price:'S/75 – S/135',
+   media:{images:[{n:'rodillera-frente.jpg'}],videos:[]},
+   desc:'Soporte de compresión para la rodilla que aporta estabilidad y firmeza en el movimiento, para entrenar o para el día a día.',
+   packs:[{q:'1 unidad',p:'S/75'},{q:'2 unidades',p:'S/109',best:true},{q:'3 unidades',p:'S/135'}],
+   beneficios:['Estabilidad en la rodilla al moverse','Compresión firme y transpirable','Se adapta al uso diario o deportivo','Talla única ajustable'],
+   specs:[{k:'Material',v:'Tejido elástico transpirable'},{k:'Talla',v:'Única ajustable'},{k:'Colores',v:'Negro'}],
+   objeciones:[
+     {o:'Está caro',r:'Pago contra entrega, paga al recibir. En pack sale más conveniente.'},
+     {o:'¿Me quedará?',r:'Talla única ajustable, se adapta a la mayoría.'},
+     {o:'Lo voy a pensar',r:'Pregunta qué le hace dudar (talla, precio o envío) y resuelve esa duda.'}
+   ],
+   argumentos:'Mismo enfoque que la tobillera: soporte y estabilidad, no promesas médicas.'}
+];
+
+/* ================= HELPERS ================= */
+const toMin=t=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
+const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+const prioName={crit:'Prioridad alta',imp:'Prioridad media',reg:'Prioridad normal'};
+const prioVar={crit:'var(--crit)',imp:'var(--imp)',reg:'var(--ok)'};
+const svgCheck='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>';
+const svgChev='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+
+/* ================= RUNBOOK ================= */
+function renderRunbook(){
+  const doneN=TASKS.filter(t=>t.done).length, pct=Math.round(doneN/TASKS.length*100);
+  document.getElementById('rbSub').textContent=`Guía operativa de la vendedora · ${doneN} de ${TASKS.length} tareas completadas hoy`;
+  document.getElementById('progBar').style.width=pct+'%';document.getElementById('progPct').textContent=pct+'%';
+  const cnt={crit:0,imp:0,reg:0};TASKS.forEach(t=>{if(!t.done)cnt[t.prio]++;});
+  document.getElementById('prioSummary').innerHTML=`
+    <div class="pband crit ${cnt.crit?'':'done-all'}"><span class="dot" style="background:var(--crit)"></span><span class="plabel">Crítico</span><span class="ptext">${cnt.crit?'tareas pendientes':'✓ Sin pendientes'}</span><span class="pcount">${cnt.crit}</span></div>
+    <div class="pband imp ${cnt.imp?'':'done-all'}"><span class="dot" style="background:var(--imp)"></span><span class="plabel">Importante</span><span class="ptext">${cnt.imp?'tareas pendientes':'✓ Sin pendientes'}</span><span class="pcount">${cnt.imp}</span></div>
+    <div class="pband reg ${cnt.reg?'':'done-all'}"><span class="dot" style="background:var(--ok)"></span><span class="plabel">Regular</span><span class="ptext">${cnt.reg?'tareas pendientes':'✓ Sin pendientes'}</span><span class="pcount">${cnt.reg}</span></div>`;
+  const tl=document.getElementById('timeline');tl.innerHTML='';let lastBlock=null;
+  TASKS.forEach((t,i)=>{
+    if(t.block!==lastBlock){lastBlock=t.block;tl.insertAdjacentHTML('beforeend',`<div class="block-label"><b>${t.block}</b><span class="rng">${t.range}</span><span class="ln"></span></div>`);}
+    const tipsHTML=t.tips?t.tips.map(tp=>`<div class="tip ${tp.t}">${tp.x}</div>`).join(''):'';
+    const stepsHTML=t.steps.map((s,j)=>`<div class="step"><span class="sn">${j+1}</span>${s}</div>`).join('');
+    const el=document.createElement('div');el.className='task'+(t.done?' done':'')+(i===0?' open':'');
+    el.innerHTML=`
+      <div class="tl"><span class="tt">${t.time}</span><span class="tn"></span><span class="tline"></span></div>
+      <div class="card ${i===0?'open':''}">
+        <div class="chead"><span class="cdot ${t.prio}"></span><span class="tag" style="${t.prio==='crit'?'background:var(--crit-soft);color:var(--crit)':t.prio==='reg'?'background:var(--ok-soft);color:var(--ok)':''}">${t.tag}</span><span class="ct">${t.title}<span class="cdur">${t.dur}</span></span><span class="nowpill" style="display:none">Ahora</span><span class="chev">${svgChev}</span></div>
+        <div class="cbody"><div class="inner"><p class="cdesc">${t.desc}</p><div class="subh">Cómo hacerlo — paso a paso</div><div class="steps">${stepsHTML}</div>${tipsHTML?`<div class="subh">Tips importantes</div><div class="tips">${tipsHTML}</div>`:''}<div class="cactions"><button class="btn-done">${svgCheck.replace('currentColor','#fff')} ${t.done?'Completada':'Marcar como completada'}</button><button class="btn-edit">Editar</button></div></div></div>
+      </div>`;
+    el.querySelector('.chead').onclick=()=>el.querySelector('.card').classList.toggle('open');
+    el.querySelector('.btn-done').onclick=e=>{e.stopPropagation();t.done=!t.done;renderRunbook();};
+    tl.appendChild(el);
+  });
+  simulate();
+}
+function simulate(){
+  const now=+document.getElementById('simRange').value;
+  document.getElementById('simNow').textContent=fmt(now);
+  let idx=-1;TASKS.forEach((t,i)=>{if(toMin(t.time)<=now)idx=i;});
+  document.querySelectorAll('#timeline .task').forEach((el,i)=>{
+    const isNow=i===idx&&!TASKS[i].done;el.classList.toggle('now',isNow);el.querySelector('.card').classList.toggle('now',isNow);el.querySelector('.nowpill').style.display=isNow?'inline-block':'none';});
+  const at=TASKS[Math.max(0,idx)];
+  document.getElementById('turnoTime').textContent=at?at.time:'—';
+  document.getElementById('turnoTask').textContent=at?at.title:'—';
+  document.getElementById('turnoDot').style.background=at?prioVar[at.prio]:'var(--muted-2)';
+  document.getElementById('turnoPrio').textContent=at?prioName[at.prio]:'';
+  const rt=document.getElementById('railTasks');rt.innerHTML='';
+  TASKS.forEach((t,i)=>{const el=document.createElement('div');el.className='rtask'+(t.done?' done':'')+(i===idx?' active':'');el.innerHTML=`<span class="rk"></span><span class="rtime">${t.time}</span><span class="rname">${t.title}</span>`;el.onclick=()=>{const c=document.querySelectorAll('#timeline .task')[i];c.querySelector('.card').classList.add('open');c.scrollIntoView({behavior:'smooth',block:'center'});};rt.appendChild(el);});
+}
+document.getElementById('simRange').addEventListener('input',simulate);
+
+/* ================= PROCESOS (con video YouTube) ================= */
+function renderProcesos(){
+  const list=document.getElementById('procList');list.innerHTML='';
+  PROCESOS.forEach(p=>{
+    if(p.video===undefined)p.video='';
+    const stepsHTML=p.steps.map((s,j)=>`<div class="step"><span class="sn">${j+1}</span>${s}</div>`).join('');
+    const tipsHTML=p.tips?p.tips.map(tp=>`<div class="tip ${tp.t}">${tp.x}</div>`).join(''):'';
+    const hasVid=!!p.video;const vid=hasVid?ytId(p.video):null;
+    const el=document.createElement('div');el.className='proc';
+    el.innerHTML=`<div class="proc-head"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="pt"><b>${p.n}</b><span>${p.when}</span></div><span class="vflag ${hasVid?'has':'no'}">${hasVid?'Con video':'Sin video'}</span><span class="chev">${svgChev}</span></div>
+      <div class="proc-body"><div class="pin"><div class="subh">Paso a paso</div><div class="steps">${stepsHTML}</div>${tipsHTML?`<div class="subh">Tips</div><div class="tips">${tipsHTML}</div>`:''}
+        <div class="subh">Video del proceso</div>
+        <div class="vid-embed ${hasVid?'show':''}">${vid?`<iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen></iframe>`:''}</div>
+        <div class="vid-add"><input placeholder="Pega un link de YouTube…" value="${p.video||''}"><button><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Agregar video</button></div>
+      </div></div>`;
+    el.querySelector('.proc-head').onclick=()=>el.classList.toggle('open');
+    const inp=el.querySelector('.vid-add input'),emb=el.querySelector('.vid-embed'),flag=el.querySelector('.vflag');
+    el.querySelector('.vid-add button').onclick=()=>{const url=inp.value.trim();const id=ytId(url);if(id){p.video=url;emb.innerHTML=`<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>`;emb.classList.add('show');flag.className='vflag has';flag.textContent='Con video';}else{inp.style.borderColor='var(--crit)';setTimeout(()=>inp.style.borderColor='',1200);}};
+    list.appendChild(el);
+  });
+}
+
+/* ================= ONBOARDING ================= */
+function renderVideos(){
+  const list=document.getElementById('videoList');list.innerHTML='';
+  VIDEOS.forEach(v=>{
+    const ready=!!v.link;const el=document.createElement('div');el.className='video-card';
+    el.innerHTML=`<div class="vc-top"><div class="vc-thumb ${ready?'':'pending'}">${ready?'<div class="pl"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>':'<div class="cam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg></div>'}<span class="dur">${v.dur}</span></div><div class="vc-info"><div class="vnum">Video ${v.n}</div><h4>${v.title}</h4><div class="vtype">${v.type}</div></div><span class="vc-status ${ready?'ready':'pending'}">${ready?'Listo':'Por grabar'}</span></div><div class="vc-guion"><div class="gtoggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Guion sugerido — qué narrar<span class="chev">${svgChev}</span></div><div class="gbody"><div class="gin"><div class="glabel">Guion</div><p>${v.guion}</p>${ready?'':`<div class="vc-save"><input placeholder="Pega el link de YouTube, Vimeo o Loom…"><button>Guardar video</button></div>`}</div></div></div>`;
+    el.querySelector('.gtoggle').onclick=()=>el.classList.toggle('gopen');
+    const save=el.querySelector('.vc-save');if(save)save.querySelector('button').onclick=()=>{const val=save.querySelector('input').value.trim();if(val){v.link=val;renderVideos();updateBanner();}};
+    list.appendChild(el);
+  });
+}
+function updateBanner(){const p=VIDEOS.filter(v=>!v.link).length;const b=document.getElementById('videoBanner');document.getElementById('pendingCount').textContent=p;if(p===0){b.classList.add('clear');b.querySelector('div').innerHTML='<b>¡Listo!</b> Todos los videos de ventas están grabados. 🎉';}else b.classList.remove('clear');}
+function renderChecklist(){const c=document.getElementById('checklist');c.innerHTML='';CHECKLIST.forEach(g=>{const grp=document.createElement('div');grp.className='day-group';grp.innerHTML=`<div class="day-h"><span class="db">${g.day}</span></div>`;g.items.forEach(it=>{const el=document.createElement('div');el.className='check';el.innerHTML=`<span class="box">${svgCheck.replace('currentColor','#fff')}</span><span class="ct">${it}</span>`;el.onclick=()=>el.classList.toggle('done');grp.appendChild(el);});c.appendChild(grp);});}
+
+/* ================= EJEMPLOS REALES ================= */
+let ejFilter='all';
+function renderEjemplos(){
+  const g=document.getElementById('ejGrid');g.innerHTML='';
+  EJEMPLOS.filter(e=>ejFilter==='all'||e.kind===ejFilter).forEach(e=>{
+    const idx=EJEMPLOS.indexOf(e);const el=document.createElement('div');el.className='ej-card';
+    const icon=e.kind==='chat'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>';
+    el.innerHTML=`<div class="ej-cover ${e.kind}"><span class="kind">${e.kind==='chat'?'Chat':'Llamada'}</span><div class="big">${icon}</div><span class="dur">${e.dur}</span></div><div class="ej-b"><h4>${e.title}</h4><p>${e.desc}</p><span class="obj-tag">${e.obj}</span></div>`;
+    el.onclick=()=>openEjemplo(idx);g.appendChild(el);
+  });
+}
+function openEjemplo(i){
+  const e=EJEMPLOS[i];const mc=document.getElementById('modalContent');const color=e.kind==='chat'?'#16a34a':'#2563eb';
+  const icon=e.kind==='chat'?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>';
+  let body='';
+  if(e.kind==='chat'){body=`<div class="chatlog">${e.chat.map(b=>`<div class="bub ${b.s}"><div class="who">${b.w}</div>${b.t}</div>`).join('')}</div>`;}
+  else{body=`<div class="callplayer"><div class="disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></div><div class="wave">${Array.from({length:18}).map((_,k)=>`<i style="animation-delay:${k*.08}s"></i>`).join('')}</div><div class="pbar"><i></i></div><div class="ptime">0:48 / ${e.dur}</div><div class="note"><b style="color:${color}">Qué observar:</b> ${e.note}</div></div>`;}
+  mc.innerHTML=`<div class="modal-head"><div class="mi" style="background:${color}">${icon}</div><div><b>${e.title}</b><span>${e.kind==='chat'?'Conversación de WhatsApp':'Llamada de voz'} · ${e.dur}</span></div><div class="close" id="modalClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div><div class="modal-body">${body}<div class="learn"><b>Qué aprender:</b> ${e.learn}</div></div>`;
+  document.getElementById('modal').classList.add('show');document.getElementById('modalClose').onclick=closeModal;
+}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+document.getElementById('modal').onclick=e=>{if(e.target.id==='modal')closeModal();};
+document.querySelectorAll('.ejf').forEach(c=>c.onclick=()=>{document.querySelectorAll('.ejf').forEach(x=>x.classList.remove('active'));c.classList.add('active');ejFilter=c.dataset.f;renderEjemplos();});
+
+/* ================= FICHAS ================= */
+function renderProdGrid(){
+  const g=document.getElementById('prodGrid');g.innerHTML='';
+  PRODUCTS.forEach(p=>{
+    const el=document.createElement('div');el.className='prod-card';
+    el.innerHTML=`<div class="prod-cover"><span class="brandtag">${p.brand}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8.5" cy="9.5" r="1.5"/></svg></div>
+      <div class="prod-b"><h4>${p.name}</h4><div class="price">${p.price}</div>
+        <div class="meta"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3"/></svg>${p.media.images.length} fotos</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>${p.media.videos.length} videos</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v.5M12 8a2.5 2.5 0 0 1 1 4.8c-.6.3-1 .9-1 1.7M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/></svg>${p.objeciones.length} objeciones</span></div>
+      </div>`;
+    el.onclick=()=>openFicha(p.id);
+    g.appendChild(el);
+  });
+}
+function openFicha(id){
+  const p=PRODUCTS.find(x=>x.id===id);
+  document.getElementById('fichasGrid').style.display='none';
+  const d=document.getElementById('fichaDetail');d.style.display='block';
+  const benef=p.beneficios.map(b=>`<div class="benefit"><span class="bk">${svgCheck}</span>${b}</div>`).join('');
+  const specs=p.specs.map(s=>`<div class="spec"><span class="sk">${s.k}</span><span class="sv">${s.v}</span></div>`).join('');
+  const packs=p.packs.map(pk=>`<div class="pack ${pk.best?'best':''}">${pk.best?'<span class="pbadge">Más vendido</span>':''}<div class="pq">${pk.q}</div><div class="pp">${pk.p}</div></div>`).join('');
+  const objs=p.objeciones.map(o=>`<div class="obj"><div class="obj-q"><span class="qm">?</span>${o.o}<span class="chev">${svgChev}</span></div><div class="obj-a"><div class="ain">${o.r}</div></div></div>`).join('');
+  d.innerHTML=`
+    <div class="back" id="fichaBack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg> Volver a productos</div>
+    <div class="ficha-head"><div><span class="btag">${p.brand}</span><h2>${p.name}</h2><div class="price">${p.price}</div></div><button class="btn-edit">Editar ficha</button></div>
+
+    <div class="media">
+      <div class="media-tabs"><div class="mtab on" data-m="images">Imágenes (${p.media.images.length})</div><div class="mtab" data-m="videos">Videos del producto (${p.media.videos.length})</div></div>
+      <div class="mhint" id="mhint">Videos que explican el producto: cómo se usa, materiales, colocación. La vendedora los ve y los puede reenviar al cliente.</div>
+      <div class="mgrid" id="mediaGrid"></div>
+    </div>
+
+    <div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8v.5"/></svg> Información</h3><p class="fdesc">${p.desc}</p><div class="packs">${packs}</div></div>
+
+    <div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Beneficios</h3>${benef}</div>
+
+    <div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg> Especificaciones</h3>${specs}</div>
+
+    <div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Objeciones frecuentes y cómo responder</h3>${objs}</div>
+
+    <div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 .4-4 3.3 1.3 5L12 19l-4.3 2.7L9 14.7 5 11.4 10 11z"/></svg> Cómo presentarlo</h3><div class="argu">${p.argumentos}</div></div>`;
+  document.getElementById('fichaBack').onclick=()=>{d.style.display='none';document.getElementById('fichasGrid').style.display='block';};
+  // objeciones toggle
+  d.querySelectorAll('.obj-q').forEach(q=>q.onclick=()=>q.parentElement.classList.toggle('open'));
+  // media tabs
+  let mtab='images';
+  const renderMedia=()=>{
+    const grid=document.getElementById('mediaGrid');grid.innerHTML='';
+    document.getElementById('mhint').classList.toggle('show',mtab==='videos');
+    const arr=p.media[mtab];
+    arr.forEach((it,i)=>{
+      const tile=document.createElement('div');tile.className='mtile'+(mtab==='videos'?' vid':'');
+      tile.innerHTML=(mtab==='videos'
+        ?`<div class="dur">${it.dur||'0:00'}</div><div class="play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>`
+        :`<div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 3-3 4 4"/><circle cx="8.5" cy="9.5" r="1.5"/></svg></div>`)
+        +`<div class="del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div><div class="mname">${it.n}</div>`;
+      tile.querySelector('.del').onclick=()=>{arr.splice(i,1);renderMedia();refreshTabCounts();};
+      grid.appendChild(tile);
+    });
+    // dropzone
+    const drop=document.createElement('label');drop.className='mdrop';
+    drop.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg><span>Subir ${mtab==='videos'?'video':'imagen'}</span><input type="file" hidden accept="${mtab==='videos'?'video/*':'image/*'}" multiple>`;
+    const inp=drop.querySelector('input');
+    inp.onchange=e=>{[...e.target.files].forEach(f=>{p.media[mtab].push(mtab==='videos'?{n:f.name,dur:'0:00'}:{n:f.name});});renderMedia();refreshTabCounts();};
+    ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+    drop.addEventListener('drop',e=>{[...e.dataTransfer.files].forEach(f=>{p.media[mtab].push(mtab==='videos'?{n:f.name,dur:'0:00'}:{n:f.name});});renderMedia();refreshTabCounts();});
+    grid.appendChild(drop);
+  };
+  const refreshTabCounts=()=>{
+    d.querySelectorAll('.mtab').forEach(t=>{const m=t.dataset.m;t.textContent=(m==='images'?'Imágenes':'Videos del producto')+` (${p.media[m].length})`;});
+  };
+  d.querySelectorAll('.mtab').forEach(t=>t.onclick=()=>{d.querySelectorAll('.mtab').forEach(x=>x.classList.remove('on'));t.classList.add('on');mtab=t.dataset.m;renderMedia();});
+  renderMedia();
+  window.scrollTo({top:0});
+}
+
+/* ================= TABS ================= */
+document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>{
+  const t=tab.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));tab.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById('view-'+t).classList.add('on');
+  document.getElementById('bodyGrid').classList.toggle('full',t!=='runbook');
+});
+
+/* ================= INIT ================= */
+renderRunbook();renderVideos();updateBanner();renderChecklist();renderProcesos();renderProdGrid();renderEjemplos();
+</script>
+</body>
+</html>
