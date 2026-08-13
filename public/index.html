@@ -358,6 +358,9 @@
   .ej-b{padding:14px}.ej-b h4{font-size:14.5px;font-weight:700;letter-spacing:-.2px}
   .ej-b p{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
   .ej-b .obj-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--imp);background:var(--imp-soft);padding:3px 8px;border-radius:6px;margin-top:9px}
+  .ej-marks{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+  .ej-marks span{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted-2)}
+  .ej-marks svg{width:13px;height:13px}
 
   /* MODAL */
   .modal{position:fixed;inset:0;background:rgba(15,23,32,.55);display:none;align-items:center;justify-content:center;z-index:90;padding:20px}
@@ -428,6 +431,104 @@
   .formnote{grid-column:1/-1;font-size:11.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;line-height:1.5}
   .formnote code{background:var(--surface-3);border-radius:4px;padding:1px 5px;font-size:11px}
 
+  /* ARRASTRAR PARA REORDENAR */
+  .drag{display:none;width:34px;height:34px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--muted-2);place-items:center;cursor:grab;touch-action:none;flex-shrink:0}
+  .drag:active{cursor:grabbing}
+  .drag svg{width:15px;height:15px;pointer-events:none}
+  body.editing .drag{display:grid}
+  .card-ebar .drag{background:rgba(255,255,255,.94);box-shadow:0 2px 8px rgba(15,23,32,.14)}
+  [data-sid].dragging{opacity:.55;box-shadow:0 10px 26px -10px rgba(15,23,32,.45)}
+  [data-sid].dragging *{pointer-events:none}
+  body.dragging-now{user-select:none;-webkit-user-select:none}
+  .draghint{display:none;font-size:11.5px;color:var(--muted-2);font-weight:600;margin:-4px 0 10px}
+  body.editing .draghint{display:block}
+
+  /* SUBIDA DE ARCHIVOS */
+  .dropzone{border:1.5px dashed var(--line-2);border-radius:11px;padding:16px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.5;cursor:pointer;background:var(--surface-2)}
+  .dropzone:hover,.dropzone.over{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+  .dropzone b{display:block;font-size:13px;color:var(--text);margin-bottom:3px}
+  .dropzone.busy{opacity:.6;pointer-events:none}
+  .filerow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .fbtn{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line-2);color:var(--muted);font-weight:700;font-size:12.5px;padding:9px 13px;border-radius:9px;cursor:pointer;min-height:38px}
+  .fbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .fbtn svg{width:15px;height:15px}
+  .fbtn.solid{background:var(--accent);border-color:var(--accent);color:#fff}
+  .orsep{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted-2)}
+
+  /* VIDEOS DEL PROCESO */
+  .vslot{border:1px solid var(--line);border-radius:11px;padding:13px;margin-bottom:10px;background:var(--surface-2)}
+  .vslot .vhead{display:flex;align-items:center;gap:9px;margin-bottom:10px;flex-wrap:wrap}
+  .vslot .vname{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted-2)}
+  .vslot .vstate{font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:20px;background:var(--surface-3);color:var(--muted-2)}
+  .vslot .vstate.on{background:var(--accent-soft);color:var(--accent-ink)}
+  .vslot .vnota{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:9px;white-space:pre-wrap}
+  .player{border-radius:10px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/9;background:#000}
+  .player iframe,.player video{width:100%;height:100%;border:0;display:block}
+  .vslot .linkrow{margin-top:10px}
+  .vedit{display:none}
+  body.editing .vedit{display:block}
+
+  /* GALERÍA DE CAPTURAS Y AUDIOS */
+  .shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:9px;margin-top:10px}
+  .shot{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:var(--surface-3);cursor:pointer;border:1px solid var(--line)}
+  .shot img{width:100%;height:100%;object-fit:cover}
+  .shot .del{position:absolute;top:5px;right:5px;width:26px;height:26px;border-radius:7px;background:rgba(31,39,52,.72);display:none;place-items:center;z-index:2}
+  .shot .del svg{width:12px;height:12px;color:#fff}
+  .shot:hover .del,body.editing .shot .del{display:grid}
+  .audios{display:flex;flex-direction:column;gap:9px;margin-top:10px}
+  .arow{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;flex-wrap:wrap}
+  .arow .aname{font-size:12.5px;font-weight:700;flex:1;min-width:110px}
+  .arow audio{width:100%;min-width:0;max-width:100%;height:38px}
+  .modal-body .mblock{margin-top:18px}
+  .mblock .mtitle{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .mblock .mtitle svg{width:14px;height:14px}
+
+  /* GUION DE LA LLAMADA */
+  .guionbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;background:var(--info-soft);border:1px solid var(--info-line);color:#1e40af;font-weight:700;font-size:13px;padding:12px;border-radius:10px;cursor:pointer}
+  .guionbtn:hover{background:#e2ebff}
+  .guionbtn svg{width:16px;height:16px}
+  .glist{display:flex;flex-direction:column;gap:9px;counter-reset:g}
+  .gstep{display:flex;gap:11px;align-items:flex-start;font-size:13.5px;line-height:1.5}
+  .gstep .gn{width:24px;height:24px;border-radius:7px;background:var(--info-soft);color:var(--info);font-weight:800;font-size:11.5px;display:grid;place-items:center;flex-shrink:0}
+
+  /* INFORMACIÓN DEL NEGOCIO */
+  .info-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:12px}
+  .info-card .ihead{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .info-card h3{font-size:16px;font-weight:800;letter-spacing:-.2px;flex:1;min-width:150px}
+  .info-card .itag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--accent-ink);background:var(--accent-soft);padding:3px 9px;border-radius:6px;white-space:nowrap}
+  .info-card .ibody{font-size:13.5px;line-height:1.65;color:var(--text);white-space:pre-wrap}
+  .info-card .ilinks{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .info-card .ilink{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border-radius:8px;padding:7px 11px;text-decoration:none}
+  .info-card .ilink svg{width:13px;height:13px}
+  .info-card .ebar{position:absolute;top:12px;right:12px}
+
+  /* SOPORTE */
+  .ask{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px}
+  .ask h3{font-size:15px;font-weight:800;margin-bottom:4px}
+  .ask p{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.5}
+  .ask textarea,.ask input{width:100%;border:1px solid var(--line-2);border-radius:9px;padding:10px 12px;font-family:inherit;font-size:13.5px;outline:none;background:var(--surface);color:var(--text)}
+  .ask textarea{min-height:88px;resize:vertical;line-height:1.5;margin-bottom:9px}
+  .ask .askfoot{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .ask .who{max-width:190px}
+  .ask .askfoot .btn{margin-left:auto}
+  .ask .thumb{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);background:var(--surface-2);border-radius:8px;padding:6px 10px}
+  .ask .thumb img{width:30px;height:30px;border-radius:6px;object-fit:cover}
+  .duda{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:10px}
+  .duda .dhead{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:wrap}
+  .duda .dwho{width:28px;height:28px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-weight:800;font-size:12px;flex-shrink:0}
+  .duda .dname{font-size:13px;font-weight:700}
+  .duda .dwhen{font-size:11.5px;color:var(--muted-2)}
+  .duda .dstate{font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+  .duda .dstate.abierta{background:var(--imp-soft);color:var(--imp)}
+  .duda .dstate.resuelta{background:var(--accent-soft);color:var(--accent-ink)}
+  .duda .dtext{font-size:13.5px;line-height:1.6;white-space:pre-wrap}
+  .duda .dshot{margin-top:11px;max-width:230px;border-radius:10px;border:1px solid var(--line);cursor:pointer;display:block}
+  .duda .dans{margin-top:12px;background:var(--accent-soft);border:1px solid #c7e9e5;border-radius:10px;padding:11px 13px;font-size:13px;line-height:1.55;white-space:pre-wrap}
+  .duda .dans b{color:var(--accent-ink);display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .duda .dacts{display:none;gap:8px;margin-top:12px;flex-wrap:wrap}
+  body.editing .duda .dacts{display:flex}
+  .filters{display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap}
+
   .toast{position:fixed;bottom:calc(20px + var(--safe-b));left:50%;transform:translateX(-50%) translateY(90px);background:var(--text);color:#fff;font-size:12.5px;font-weight:600;padding:11px 16px;border-radius:9px;z-index:120;transition:transform .25s;pointer-events:none;max-width:92vw;text-align:center}
   .toast.show{transform:translateX(-50%) translateY(0)}
   .loading{padding:40px;text-align:center;color:var(--muted-2);font-weight:600}
@@ -495,6 +596,8 @@
         <div class="tab" data-tab="procesos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Procesos</div>
         <div class="tab" data-tab="fichas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5M3 9h18v11H3zM3 9v11"/></svg>Fichas de producto</div>
         <div class="tab" data-tab="ejemplos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>Ejemplos reales</div>
+        <div class="tab" data-tab="info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8v.5"/></svg>Información del negocio</div>
+        <div class="tab" data-tab="soporte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.9-.9 1.7M12 16.5v.5"/></svg>Soporte<span class="new" id="dudasBadge" style="display:none">0</span></div>
       </div>
     </div>
 
@@ -550,8 +653,39 @@
             <div class="ejf" data-f="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Chat WhatsApp</div>
             <div class="ejf" data-f="call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg> Llamadas</div>
           </div>
+          <div class="draghint">Arrastra las tarjetas por el asa para cambiar el orden.</div>
           <div class="ej-grid" id="ejGrid"></div>
           <button class="add" id="addEj"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Añadir ejemplo</button>
+        </section>
+
+        <!-- ===== INFORMACIÓN DEL NEGOCIO ===== -->
+        <section class="view" id="view-info">
+          <div class="panel-head"><h2>Información del negocio</h2><p>El contexto que la vendedora necesita antes de operar: qué vendemos, cómo funciona el pago contra entrega, los horarios que no se pueden pasar y las reglas que no se negocian.</p></div>
+          <div class="draghint">Arrastra los bloques por el asa para cambiar el orden.</div>
+          <div id="infoList"></div>
+          <button class="add" id="addInfo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Añadir bloque de información</button>
+        </section>
+
+        <!-- ===== SOPORTE ===== -->
+        <section class="view" id="view-soporte">
+          <div class="panel-head"><h2>Soporte</h2><p>¿Te trabaste con algo? Escríbelo aquí con una captura si ayuda. Queda registrado y se responde desde acá mismo, así la respuesta le sirve también a la siguiente persona.</p></div>
+          <div class="ask">
+            <h3>Escribe tu duda</h3>
+            <p>Cuenta qué pasó, con qué pedido o cliente, y qué esperabas que ocurriera.</p>
+            <textarea id="askText" placeholder="Ejemplo: un cliente de provincia no quiere pagar el adelanto de S/30, ¿qué le digo?"></textarea>
+            <input class="who" id="askWho" placeholder="Tu nombre" maxlength="60">
+            <div class="askfoot">
+              <button class="fbtn" id="askShot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 3-3 4 4"/></svg>Adjuntar captura</button>
+              <div id="askThumb"></div>
+              <button class="btn" id="askSend">Enviar duda</button>
+            </div>
+          </div>
+          <div class="filters" id="dudaFilters">
+            <div class="ejf active" data-d="all">Todas</div>
+            <div class="ejf" data-d="abierta">Abiertas</div>
+            <div class="ejf" data-d="resuelta">Resueltas</div>
+          </div>
+          <div id="dudaList"></div>
         </section>
 
       </div>
@@ -566,6 +700,8 @@
 </div>
 
 <div class="modal" id="modal"><div class="modal-box" id="modalBox"><div id="modalContent"></div></div></div>
+<div class="modal" id="modal2" style="z-index:110"><div class="modal-box" id="modalBox2"><div id="modalContent2"></div></div></div>
+<input type="file" id="filePick" hidden>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -626,21 +762,115 @@ const svgPlay = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l1
 const ICON = {
   pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
   penW: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
-  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
-  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 12h9l1-12"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  grip: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>',
+  img: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 3-3 4 4"/><circle cx="8.5" cy="9.5" r="1.3"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  film: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg>',
 };
 const flash = (input) => { input.style.borderColor = 'var(--crit)'; setTimeout(() => (input.style.borderColor = ''), 1400); };
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const emptyBox = (txt) => `<div class="empty">${esc(txt)}</div>`;
+const isUpload = (u) => /^\/uploads\//.test(String(u || ''));
+const isVideoFile = (u) => isUpload(u) && /\.(mp4|webm|mov)$/i.test(u);
+const initial = (s) => (String(s || '?').trim()[0] || '?').toUpperCase();
+const fechaCorta = (iso) => {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) + ' · ' +
+    d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+};
+
+/* ================= ARCHIVOS ================= */
+const filePick = document.getElementById('filePick');
+const pickFile = (accept) => new Promise((resolve) => {
+  filePick.value = '';
+  filePick.accept = accept || '';
+  filePick.onchange = () => resolve(filePick.files[0] || null);
+  filePick.click();
+});
+async function uploadFile(file) {
+  if (!file) return null;
+  const maxMb = (S && S.maxUploadMb) || 100;
+  if (file.size > maxMb * 1024 * 1024) throw new Error(`El archivo pesa más de ${maxMb} MB`);
+  toast('Subiendo archivo…');
+  const r = await fetch('/api/uploads', {
+    method: 'POST',
+    headers: { 'content-type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'No se pudo subir el archivo');
+  return data; // { url, kind, size }
+}
+
+/* ================= ARRASTRAR PARA REORDENAR ================= */
+// Reordena por punteros (no usa drag&drop de HTML5) para que funcione igual con dedo y con ratón.
+function sortable(list, onOrder) {
+  if (!list || list.dataset.sortable) return;
+  list.dataset.sortable = '1';
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.drag');
+    if (!handle || !EDIT) return;
+    const item = handle.closest('[data-sid]');
+    if (!item || item.parentElement !== list) return;
+    e.preventDefault();
+    const startY = e.clientY;
+    let moved = false;
+    item.classList.add('dragging');
+    document.body.classList.add('dragging-now');
+    try { handle.setPointerCapture(e.pointerId); } catch { /* no soportado */ }
+    const onMove = (ev) => {
+      if (!moved && Math.abs(ev.clientY - startY) < 5) return;
+      moved = true;
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      const over = under && under.closest('[data-sid]');
+      if (!over || over === item || over.parentElement !== list) return;
+      const r = over.getBoundingClientRect();
+      list.insertBefore(item, ev.clientY > r.top + r.height / 2 ? over.nextSibling : over);
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      item.classList.remove('dragging');
+      document.body.classList.remove('dragging-now');
+      if (moved) onOrder([...list.children].filter((n) => n.dataset.sid).map((n) => n.dataset.sid));
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  });
+}
+const saveOrder = async (path, ids) => {
+  try { await api('PUT', `${path}/order`, { ids }); await reload(); toast('Orden guardado'); }
+  catch (err) { toast(err.message); await reload(); }
+};
 
 /* ================= MODAL ================= */
 const modal = document.getElementById('modal');
 const modalBox = document.getElementById('modalBox');
-const closeModal = () => { modal.classList.remove('show'); document.getElementById('modalContent').innerHTML = ''; };
+const modal2 = document.getElementById('modal2');
+let modalCleanup = null; // listeners que sólo viven mientras el modal está abierto
+
+const closeModal = () => {
+  modal.classList.remove('show');
+  document.getElementById('modalContent').innerHTML = '';
+  if (modalCleanup) { modalCleanup(); modalCleanup = null; }
+};
+const closeModal2 = () => { modal2.classList.remove('show'); document.getElementById('modalContent2').innerHTML = ''; };
 modal.onclick = (e) => { if (e.target === modal) closeModal(); };
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); setDrawer(false); } });
+modal2.onclick = (e) => { if (e.target === modal2) closeModal2(); };
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (modal2.classList.contains('show')) return closeModal2(); // primero el pop-up de encima
+  closeModal();
+  setDrawer(false);
+});
 
 function openModal(html, wide) {
   modalBox.classList.toggle('wide', !!wide);
@@ -649,15 +879,23 @@ function openModal(html, wide) {
   const c = document.getElementById('modalClose');
   if (c) c.onclick = closeModal;
 }
-const modalHead = (title, sub, color, icon) =>
-  `<div class="modal-head"><div class="mi" style="background:${color}">${icon}</div><div class="mtxt"><b>${esc(title)}</b><span>${esc(sub)}</span></div><button class="close" id="modalClose" aria-label="Cerrar">${ICON.x}</button></div>`;
+function openModal2(html) {
+  document.getElementById('modalContent2').innerHTML = html;
+  modal2.classList.add('show');
+  const c = document.getElementById('modalClose2');
+  if (c) c.onclick = closeModal2;
+}
+const modalHead = (title, sub, color, icon, closeId) =>
+  `<div class="modal-head"><div class="mi" style="background:${color}">${icon}</div><div class="mtxt"><b>${esc(title)}</b><span>${esc(sub)}</span></div><button class="close" id="${closeId || 'modalClose'}" aria-label="Cerrar">${ICON.x}</button></div>`;
 
 function openVideo(url, title, sub) {
   const emb = ytEmbed(url);
   const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>';
   const body = emb
     ? `<div class="frame"><iframe src="${esc(emb)}?rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
-    : `<div class="extlink">Este link no es de YouTube, se abre aparte: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
+    : isVideoFile(url)
+      ? `<div class="frame"><video src="${esc(url)}" controls autoplay playsinline></video></div>`
+      : `<div class="extlink">Este link no es de YouTube, se abre aparte: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
   openModal(modalHead(title, sub || 'Video', '#0d9488', icon) + `<div class="modal-body flush">${body}</div>`, true);
 }
 
@@ -909,7 +1147,7 @@ const SCHEMAS = {
       { k: 'when', label: 'Cuándo se usa', ph: 'En cada confirmación' },
       { k: 'steps', label: 'Paso a paso', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir', rich: true },
       TIPS_FIELD,
-      { k: 'url', label: 'Video de YouTube', ph: 'https://youtu.be/…' },
+      { k: 'vids', label: 'Videos', type: 'objlist', addLabel: 'Añadir video', rich: true, hint: 'Hasta 2 videos. También puedes subir archivos desde la tarjeta del proceso.', sub: [{ k: 'url', ph: 'Link de YouTube', w: '210px' }, { k: 'nota', ph: 'Comentario breve' }] },
     ],
   },
   producto: {
@@ -938,7 +1176,27 @@ const SCHEMAS = {
       { k: 'desc', label: 'Descripción corta', type: 'area', rows: 2, rich: true },
       { k: 'chat', label: 'Mensajes', type: 'objlist', addLabel: 'Añadir mensaje', rich: true, when: (v) => v.kind === 'chat', sub: [{ k: 's', type: 'select', opts: [{ v: 'in', t: 'Cliente' }, { v: 'out', t: 'Vendedora' }], w: '120px' }, { k: 'w', ph: 'Quién', w: '110px' }, { k: 't', type: 'area', ph: 'Mensaje' }] },
       { k: 'note', label: 'Qué observar en la llamada', type: 'area', when: (v) => v.kind === 'call', rich: true },
+      { k: 'guion', label: 'Guion / estructura (se abre en un pop-up)', type: 'list', addLabel: 'Añadir paso del guion', ph: 'Ej. Saludo y confirmación del nombre', rich: true },
       { k: 'learn', label: 'Qué aprender', type: 'area', rich: true },
+    ],
+  },
+  info: {
+    path: '/infos', label: 'el bloque', newTitle: 'Nuevo bloque de información', editTitle: 'Editar bloque', req: ['title'],
+    def: { tag: 'Negocio', links: [] },
+    fields: [
+      { k: 'title', label: 'Título' },
+      { k: 'tag', label: 'Etiqueta', half: true, ph: 'Negocio / Operación / Reglas' },
+      { k: 'body', label: 'Contenido', type: 'area', rows: 7, rich: true },
+      { k: 'links', label: 'Enlaces útiles', type: 'objlist', addLabel: 'Añadir enlace', sub: [{ k: 't', ph: 'Nombre', w: '170px' }, { k: 'u', ph: 'https://…' }] },
+    ],
+  },
+  duda: {
+    path: '/dudas', label: 'la duda', newTitle: 'Nueva duda', editTitle: 'Editar duda', req: ['texto'],
+    def: {},
+    fields: [
+      { k: 'autor', label: 'Quién pregunta', half: true, ph: 'Nombre' },
+      { k: 'texto', label: 'Duda', type: 'area', rows: 4, rich: true },
+      { k: 'url', label: 'Captura adjunta (link)', ph: 'https://… o /uploads/…' },
     ],
   },
 };
@@ -959,20 +1217,22 @@ function openEditor(kind, item, defaults) {
     },
   });
 }
-const moveItem = async (kind, id, dir) => {
-  try { await api('PUT', `${SCHEMAS[kind].path}/${id}/move`, { dir }); await reload(); }
-  catch (err) { toast(err.message); }
-};
 const deleteItem = async (kind, id, name) => {
   if (!confirm(`¿Eliminar ${name || SCHEMAS[kind].label}?\n\nEsta acción no se puede deshacer.`)) return;
   try { await api('DELETE', `${SCHEMAS[kind].path}/${id}`); await reload(); toast('Eliminado'); }
   catch (err) { toast(err.message); }
 };
 
-// Barra de acciones (editar / subir / bajar / eliminar) que sólo se ve en modo edición.
+// Barra de acciones (arrastrar / editar / eliminar) que sólo se ve en modo edición.
 function ebar(kind, item, opts) {
   opts = opts || {};
   const bar = el('div', 'ebar' + (opts.floating ? ' card-ebar' : ''));
+  if (opts.sort) {
+    const h = el('div', 'drag', ICON.grip);
+    h.title = 'Arrastra para reordenar';
+    h.setAttribute('aria-label', 'Arrastra para reordenar');
+    bar.appendChild(h);
+  }
   const mk = (title, icon, fn, cls) => {
     const b = el('button', 'iconbtn' + (cls ? ' ' + cls : ''), icon);
     b.type = 'button';
@@ -982,10 +1242,6 @@ function ebar(kind, item, opts) {
     bar.appendChild(b);
   };
   mk('Editar', ICON.pen, () => openEditor(kind, item));
-  if (!opts.noMove) {
-    mk('Subir', ICON.up, () => moveItem(kind, item.id, 'up'));
-    mk('Bajar', ICON.down, () => moveItem(kind, item.id, 'down'));
-  }
   mk('Eliminar', ICON.trash, () => deleteItem(kind, item.id, opts.name), 'danger');
   return bar;
 }
@@ -1038,7 +1294,7 @@ function renderRunbook() {
       try { await api('PUT', `/tasks/${t.id}/done`, { done: next }); t.done = next; renderRunbook(); } catch (err) { toast(err.message); }
     };
     // El orden del runbook lo define la hora, por eso la tarea no se sube ni se baja a mano.
-    item.querySelector('.cactions').appendChild(ebar('task', t, { noMove: true, name: `la tarea “${t.title}”` }));
+    item.querySelector('.cactions').appendChild(ebar('task', t, { name: `la tarea “${t.title}”` }));
     tl.appendChild(item);
   });
   setupRange();
@@ -1080,40 +1336,81 @@ function simulate() {
 document.getElementById('simRange').addEventListener('input', simulate);
 
 /* ================= PROCESOS ================= */
+// Reproductor: YouTube va en iframe; un archivo subido va en <video>; otro link se abre aparte.
+function playerHTML(url) {
+  const emb = ytEmbed(url);
+  if (emb) return `<div class="player"><iframe src="${esc(emb)}?rel=0" allowfullscreen></iframe></div>`;
+  if (isVideoFile(url)) return `<div class="player"><video src="${esc(url)}" controls preload="metadata"></video></div>`;
+  if (url) return `<div class="extlink">Este link no se puede incrustar: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
+  return '';
+}
+
 function renderProcesos() {
   const list = document.getElementById('procList');
   list.innerHTML = '';
   if (!S.procesos.length) list.innerHTML = emptyBox('Aún no hay procesos cargados.');
   S.procesos.forEach((p) => {
+    const vids = p.vids || [];
+    const nVids = vids.filter((v) => v.url).length;
     const stepsHTML = (p.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${rich(s)}</div>`).join('');
     const tipsHTML = (p.tips || []).map((tp) => `<div class="tip ${esc(tp.t)}">${rich(tp.x)}</div>`).join('');
-    const emb = ytEmbed(p.url);
+    const slot = (i) => {
+      const v = vids[i] || { url: '', nota: '' };
+      return `<div class="vslot" data-n="${i + 1}">
+        <div class="vhead"><span class="vname">Video ${i + 1}</span><span class="vstate ${v.url ? 'on' : ''}">${v.url ? 'Cargado' : 'Vacío'}</span></div>
+        ${playerHTML(v.url)}
+        ${v.nota ? `<div class="vnota">${rich(v.nota)}</div>` : ''}
+        <div class="vedit">
+          <div class="linkrow"><input class="vurl" placeholder="Link de YouTube…" value="${esc(v.url && !isUpload(v.url) ? v.url : '')}"><button class="fbtn vfile" type="button">${ICON.upload}Subir archivo</button></div>
+          <div class="linkrow"><input class="vcomment" placeholder="Comentario breve del video (opcional)" value="${esc(v.nota)}"><button class="vsave" type="button">${svgPlus}Guardar</button></div>
+          ${v.url ? `<div class="linkrow"><button class="fbtn vclear" type="button">Quitar este video</button>${isUpload(v.url) ? `<span class="orsep">Archivo subido</span>` : ''}</div>` : ''}
+        </div>
+      </div>`;
+    };
     const node = el('div', 'proc');
-    node.innerHTML = `<div class="proc-head"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="pt"><b>${esc(p.name)}</b><span>${esc(p.when)}</span></div><span class="vflag ${p.url ? 'has' : 'no'}">${p.url ? 'Con video' : 'Sin video'}</span><span class="chev">${svgChev}</span></div>
+    node.dataset.sid = p.id;
+    node.innerHTML = `<div class="proc-head"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="pt"><b>${esc(p.name)}</b><span>${esc(p.when)}</span></div><span class="vflag ${nVids ? 'has' : 'no'}">${nVids ? `${nVids} video${nVids > 1 ? 's' : ''}` : 'Sin video'}</span><span class="chev">${svgChev}</span></div>
       <div class="proc-body"><div class="pin">${stepsHTML ? `<div class="subh">Paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${tipsHTML ? `<div class="subh">Tips</div><div class="tips">${tipsHTML}</div>` : ''}
-        <div class="subh">Video del proceso</div>
-        <div class="vid-embed ${emb ? 'show' : ''}">${emb ? `<iframe src="${esc(emb)}?rel=0" allowfullscreen></iframe>` : ''}</div>
-        <div class="linkrow"><input placeholder="Pega el link de YouTube…" value="${esc(p.url)}"><button>${svgPlus}Guardar video</button></div>
+        <div class="subh">Videos del proceso</div>
+        ${slot(0)}${slot(1)}
       </div></div>`;
     node.querySelector('.proc-head').onclick = () => node.classList.toggle('open');
-    node.querySelector('.proc-head').insertBefore(ebar('proceso', p, { name: `el proceso “${p.name}”` }), node.querySelector('.proc-head .chev'));
-    const inp = node.querySelector('.linkrow input'), embEl = node.querySelector('.vid-embed'), flag = node.querySelector('.vflag');
-    node.querySelector('.linkrow button').onclick = async () => {
-      const url = inp.value.trim();
-      if (url && !ytId(url)) return flash(inp);
-      try {
-        await api('PUT', `/procesos/${p.id}/url`, { url });
-        p.url = url;
-        const e2 = ytEmbed(url);
-        embEl.innerHTML = e2 ? `<iframe src="${esc(e2)}?rel=0" allowfullscreen></iframe>` : '';
-        embEl.classList.toggle('show', !!e2);
-        flag.className = 'vflag ' + (url ? 'has' : 'no');
-        flag.textContent = url ? 'Con video' : 'Sin video';
-        toast(url ? 'Video guardado' : 'Video quitado');
-      } catch (err) { toast(err.message); flash(inp); }
-    };
+    node.querySelector('.proc-head').insertBefore(ebar('proceso', p, { sort: true, name: `el proceso “${p.name}”` }), node.querySelector('.proc-head .chev'));
+
+    node.querySelectorAll('.vslot').forEach((sl) => {
+      const n = Number(sl.dataset.n);
+      const urlInp = sl.querySelector('.vurl'), notaInp = sl.querySelector('.vcomment');
+      const save = async (url, nota) => {
+        try { await api('PUT', `/procesos/${p.id}/video`, { n, url, nota }); await reload(); toast('Video guardado'); }
+        catch (err) { toast(err.message); }
+      };
+      sl.querySelector('.vsave').onclick = (e) => {
+        e.stopPropagation();
+        const url = urlInp.value.trim();
+        const actual = (p.vids || [])[n - 1] || {};
+        if (url && !ytId(url)) return flash(urlInp);
+        // Si ya hay un archivo subido y el campo de link está vacío, se conserva el archivo.
+        save(url || (isUpload(actual.url) ? actual.url : ''), notaInp.value.trim());
+      };
+      sl.querySelector('.vfile').onclick = async (e) => {
+        e.stopPropagation();
+        try {
+          const f = await pickFile('video/mp4,video/webm,video/quicktime');
+          if (!f) return;
+          const up = await uploadFile(f);
+          await save(up.url, notaInp.value.trim());
+        } catch (err) { toast(err.message); }
+      };
+      const clear = sl.querySelector('.vclear');
+      if (clear) clear.onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm('¿Quitar este video?')) return;
+        await save('', '');
+      };
+    });
     list.appendChild(node);
   });
+  sortable(list, (ids) => saveOrder('/procesos', ids));
 }
 
 /* ================= ONBOARDING ================= */
@@ -1124,25 +1421,38 @@ function renderVideos() {
   S.videos.forEach((v) => {
     const ready = !!v.url, thumb = ytThumb(v.url);
     const node = el('div', 'video-card');
+    node.dataset.sid = v.id;
     node.innerHTML = `<div class="vc-top"><div class="vc-thumb ${ready ? 'ready' : 'pending'}">${thumb ? `<img src="${esc(thumb)}" alt="">` : ''}${ready ? `<div class="pl">${svgPlay}</div>` : '<div class="cam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg></div>'}<span class="dur">${esc(v.dur)}</span></div>
-      <div class="vc-info"><div class="vnum">Video ${v.n}</div><h4>${esc(v.title)}</h4><div class="vtype">${esc(v.type)}</div></div>
+      <div class="vc-info"><div class="vnum">Video ${v.n}</div><h4>${esc(v.title)}</h4><div class="vtype">${esc(v.type)}${isUpload(v.url) ? ' · archivo subido' : ''}</div></div>
       <div class="vc-side"><span class="vc-status ${ready ? 'ready' : 'pending'}">${ready ? 'Listo' : 'Por grabar'}</span></div></div>
       <div class="vc-guion"><div class="gtoggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Guion sugerido — qué narrar<span class="chev">${svgChev}</span></div>
       <div class="gbody"><div class="gin"><div class="glabel">Guion</div><p>${rich(v.guion)}</p>
-        <div class="linkrow"><input placeholder="Pega el link de YouTube…" value="${esc(v.url)}"><button>${svgPlus}${ready ? 'Actualizar link' : 'Guardar video'}</button></div>
+        <div class="linkrow"><input placeholder="Pega el link de YouTube…" value="${esc(!isUpload(v.url) ? v.url : '')}"><button>${svgPlus}${ready ? 'Actualizar link' : 'Guardar video'}</button><button class="fbtn vfile" type="button">${ICON.upload}Subir archivo</button></div>
       </div></div></div>`;
     node.querySelector('.gtoggle').onclick = () => node.classList.toggle('gopen');
     if (ready) node.querySelector('.vc-thumb').onclick = () => openVideo(v.url, v.title, `Video ${v.n} · ${v.dur}`);
-    node.querySelector('.vc-side').appendChild(ebar('video', v, { name: `el video “${v.title}”` }));
+    node.querySelector('.vc-side').appendChild(ebar('video', v, { sort: true, name: `el video “${v.title}”` }));
     const inp = node.querySelector('.linkrow input');
-    node.querySelector('.linkrow button').onclick = async () => {
+    const saveUrl = async (url) => {
+      try { await api('PUT', `/videos/${v.id}/url`, { url }); await reload(); toast(url ? 'Video guardado' : 'Video quitado'); }
+      catch (err) { toast(err.message); flash(inp); }
+    };
+    node.querySelector('.linkrow button').onclick = () => {
       const url = inp.value.trim();
       if (url && !ytId(url)) return flash(inp);
-      try { await api('PUT', `/videos/${v.id}/url`, { url }); v.url = url; renderVideos(); updateBanner(); toast(url ? 'Video guardado' : 'Video quitado'); }
-      catch (err) { toast(err.message); flash(inp); }
+      saveUrl(url);
+    };
+    node.querySelector('.vfile').onclick = async () => {
+      try {
+        const f = await pickFile('video/mp4,video/webm,video/quicktime');
+        if (!f) return;
+        const up = await uploadFile(f);
+        await saveUrl(up.url);
+      } catch (err) { toast(err.message); }
     };
     list.appendChild(node);
   });
+  sortable(list, (ids) => saveOrder('/videos', ids));
 }
 
 function updateBanner() {
@@ -1166,17 +1476,21 @@ function renderChecklist() {
     addMini.onclick = () => openEditor('check', null, { day: g.day });
     head.appendChild(addMini);
     grp.appendChild(head);
+    const items = el('div', 'day-items');
     g.items.forEach((it) => {
       const node = el('div', 'check' + (it.done ? ' done' : ''),
         `<span class="box">${svgCheck.replace('currentColor', '#fff')}</span><span class="ct">${rich(it.text)}</span>`);
+      node.dataset.sid = it.id;
       node.onclick = async () => {
         const next = !it.done;
         try { await api('PUT', `/checklist/${it.id}/done`, { done: next }); it.done = next; node.classList.toggle('done', next); }
         catch (err) { toast(err.message); }
       };
-      node.appendChild(ebar('check', { id: it.id, day: g.day, item: it.text }, { name: 'este ítem' }));
-      grp.appendChild(node);
+      node.appendChild(ebar('check', { id: it.id, day: g.day, item: it.text }, { sort: true, name: 'este ítem' }));
+      items.appendChild(node);
     });
+    grp.appendChild(items);
+    sortable(items, (ids) => saveOrder('/checklist', ids));
     c.appendChild(grp);
   });
 }
@@ -1193,11 +1507,29 @@ function renderEjemplos() {
     const icon = e.kind === 'chat'
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>';
-    node.innerHTML = `<div class="ej-cover ${esc(e.kind)}"><span class="kind">${e.kind === 'chat' ? 'Chat' : 'Llamada'}</span><div class="big">${icon}</div><span class="dur">${esc(e.dur)}</span></div><div class="ej-b"><h4>${esc(e.title)}</h4><p>${rich(e.desc)}</p>${e.obj ? `<span class="obj-tag">${esc(e.obj)}</span>` : ''}</div>`;
+    const nImg = e.media.images.length, nAud = e.media.audios.length;
+    const marks = [
+      nImg ? `<span>${ICON.img}${nImg}</span>` : '',
+      nAud ? `<span>${ICON.mic}${nAud}</span>` : '',
+      e.guion && e.guion.length ? `<span>${ICON.list}guion</span>` : '',
+    ].join('');
+    node.dataset.sid = e.id;
+    node.innerHTML = `<div class="ej-cover ${esc(e.kind)}"><span class="kind">${e.kind === 'chat' ? 'Chat' : 'Llamada'}</span><div class="big">${icon}</div><span class="dur">${esc(e.dur)}</span></div><div class="ej-b"><h4>${esc(e.title)}</h4><p>${rich(e.desc)}</p>${e.obj ? `<span class="obj-tag">${esc(e.obj)}</span>` : ''}${marks ? `<div class="ej-marks">${marks}</div>` : ''}</div>`;
     node.onclick = () => openEjemplo(e);
-    node.appendChild(ebar('ejemplo', e, { floating: true, name: `el ejemplo “${e.title}”` }));
+    node.appendChild(ebar('ejemplo', e, { floating: true, sort: ejFilter === 'all', name: `el ejemplo “${e.title}”` }));
     g.appendChild(node);
   });
+  if (ejFilter === 'all') sortable(g, (ids) => saveOrder('/ejemplos', ids));
+}
+
+// Adjunta una captura o un audio al ejemplo y vuelve a abrirlo con el contenido fresco.
+async function attachToEjemplo(id, file, kind) {
+  const up = await uploadFile(file);
+  await api('POST', `/ejemplos/${id}/attach`, { kind: kind || up.kind, title: file.name, url: up.url });
+  await reload();
+  const fresh = S.ejemplos.find((x) => x.id === id);
+  if (fresh) openEjemplo(fresh);
+  toast(kind === 'audio' ? 'Audio agregado' : 'Captura agregada');
 }
 
 function openEjemplo(e) {
@@ -1205,12 +1537,106 @@ function openEjemplo(e) {
   const icon = e.kind === 'chat'
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>';
-  const body = e.kind === 'chat'
-    ? (e.chat && e.chat.length
-      ? `<div class="chatlog">${e.chat.map((b) => `<div class="bub ${esc(b.s)}"><div class="who">${esc(b.w)}</div>${rich(b.t)}</div>`).join('')}</div>`
-      : emptyBox('Este ejemplo todavía no tiene mensajes.'))
-    : `<div class="callplayer"><div class="disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></div><div class="wave">${Array.from({ length: 18 }).map((_, k) => `<i style="animation-delay:${k * 0.08}s"></i>`).join('')}</div><div class="pbar"><i></i></div><div class="ptime">${esc(e.dur)}</div>${e.note ? `<div class="note"><b style="color:${color}">Qué observar:</b> ${rich(e.note)}</div>` : ''}</div>`;
-  openModal(modalHead(e.title, `${e.kind === 'chat' ? 'Conversación de WhatsApp' : 'Llamada de voz'} · ${e.dur}`, color, icon) + `<div class="modal-body">${body}${e.learn ? `<div class="learn"><b>Qué aprender:</b> ${rich(e.learn)}</div>` : ''}</div>`);
+  const imgs = e.media.images, auds = e.media.audios;
+
+  const chatBody = e.chat && e.chat.length
+    ? `<div class="chatlog">${e.chat.map((b) => `<div class="bub ${esc(b.s)}"><div class="who">${esc(b.w)}</div>${rich(b.t)}</div>`).join('')}</div>`
+    : (imgs.length ? '' : emptyBox('Este ejemplo todavía no tiene mensajes escritos. Pega una captura de la conversación abajo.'));
+
+  // Si hay audio real de la llamada se reproduce; si no, queda la ficha con la duración.
+  const callBody = `<div class="callplayer"><div class="disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></div>${
+    auds.length ? '' : `<div class="wave">${Array.from({ length: 18 }).map((_, k) => `<i style="animation-delay:${k * 0.08}s"></i>`).join('')}</div><div class="pbar"><i></i></div>`
+  }<div class="ptime">${esc(e.dur)}</div>${e.note ? `<div class="note"><b style="color:${color}">Qué observar:</b> ${rich(e.note)}</div>` : ''}</div>`;
+
+  const shots = `<div class="mblock" id="shotsBlock"><div class="mtitle">${ICON.img} Capturas de la conversación ${imgs.length ? `(${imgs.length})` : ''}</div>
+    ${imgs.length ? `<div class="shots">${imgs.map((m) => `<div class="shot" data-id="${m.id}" data-url="${esc(m.url)}"><img src="${esc(m.url)}" alt="${esc(m.title)}" loading="lazy"><div class="del" title="Quitar">${ICON.x}</div></div>`).join('')}</div>` : ''}
+    <div class="dropzone" id="shotZone"><b>Pega aquí tu captura (Ctrl+V)</b>o arrastra la imagen, o toca para elegirla del teléfono</div></div>`;
+
+  const audios = `<div class="mblock" id="audioBlock"><div class="mtitle">${ICON.mic} Audio ${auds.length ? `(${auds.length})` : ''}</div>
+    ${auds.length ? `<div class="audios">${auds.map((m) => `<div class="arow" data-id="${m.id}"><span class="aname">${esc(m.title)}</span><audio src="${esc(m.url)}" controls preload="none"></audio><button class="iconbtn danger adel" type="button" title="Quitar">${ICON.trash}</button></div>`).join('')}</div>` : ''}
+    <div class="filerow"><button class="fbtn" id="audioAdd" type="button">${ICON.upload}Subir audio de la llamada</button></div></div>`;
+
+  const guionBtn = (e.guion && e.guion.length)
+    ? `<button class="guionbtn" id="guionBtn" type="button">${ICON.list}Ver el guion de la ${e.kind === 'call' ? 'llamada' : 'conversación'} (${e.guion.length} pasos)</button>`
+    : '';
+
+  openModal(
+    modalHead(e.title, `${e.kind === 'chat' ? 'Conversación de WhatsApp' : 'Llamada de voz'} · ${e.dur}`, color, icon) +
+    `<div class="modal-body">${e.kind === 'chat' ? chatBody : callBody}${guionBtn}${e.learn ? `<div class="learn"><b>Qué aprender:</b> ${rich(e.learn)}</div>` : ''}${shots}${audios}</div>`,
+  );
+
+  const box = document.getElementById('modalContent');
+  const zone = box.querySelector('#shotZone');
+
+  const subir = async (file, kind) => {
+    if (!file) return;
+    zone.classList.add('busy');
+    try { await attachToEjemplo(e.id, file, kind); }
+    catch (err) { toast(err.message); zone.classList.remove('busy'); }
+  };
+
+  zone.onclick = async () => { const f = await pickFile('image/*'); subir(f, 'image'); };
+  zone.addEventListener('dragover', (ev) => { ev.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', (ev) => {
+    ev.preventDefault();
+    zone.classList.remove('over');
+    const f = [...(ev.dataTransfer.files || [])].find((x) => x.type.startsWith('image/'));
+    subir(f, 'image');
+  });
+
+  // Pegar con Ctrl+V en cualquier parte del ejemplo abierto: es la vía rápida para las capturas.
+  const onPaste = (ev) => {
+    const f = [...(ev.clipboardData?.files || [])].find((x) => x.type.startsWith('image/'));
+    if (!f) return;
+    ev.preventDefault();
+    subir(f, 'image');
+  };
+  document.addEventListener('paste', onPaste);
+  modalCleanup = () => document.removeEventListener('paste', onPaste);
+
+  box.querySelectorAll('.shot').forEach((sh) => {
+    sh.onclick = (ev) => {
+      if (ev.target.closest('.del')) return;
+      openImage(sh.dataset.url, 'Captura de la conversación');
+    };
+    sh.querySelector('.del').onclick = async (ev) => {
+      ev.stopPropagation();
+      if (!confirm('¿Quitar esta captura?')) return;
+      try {
+        await api('DELETE', `/attach/${sh.dataset.id}`);
+        await reload();
+        const fresh = S.ejemplos.find((x) => x.id === e.id);
+        if (fresh) openEjemplo(fresh);
+      } catch (err) { toast(err.message); }
+    };
+  });
+
+  box.querySelector('#audioAdd').onclick = async () => {
+    const f = await pickFile('audio/*');
+    subir(f, 'audio');
+  };
+  box.querySelectorAll('.arow .adel').forEach((b) => (b.onclick = async () => {
+    if (!confirm('¿Quitar este audio?')) return;
+    try {
+      await api('DELETE', `/attach/${b.closest('.arow').dataset.id}`);
+      await reload();
+      const fresh = S.ejemplos.find((x) => x.id === e.id);
+      if (fresh) openEjemplo(fresh);
+    } catch (err) { toast(err.message); }
+  }));
+
+  const gb = box.querySelector('#guionBtn');
+  if (gb) gb.onclick = () => openGuion(e);
+}
+
+// Pop-up con la estructura paso a paso, encima del ejemplo abierto.
+function openGuion(e) {
+  const steps = (e.guion || []).map((g, i) => `<div class="gstep"><span class="gn">${i + 1}</span><div>${rich(g)}</div></div>`).join('');
+  openModal2(
+    modalHead(`Guion — ${e.title}`, e.kind === 'call' ? 'Estructura de la llamada' : 'Estructura de la conversación', '#2563eb', ICON.chat, 'modalClose2') +
+    `<div class="modal-body"><div class="glist">${steps || emptyBox('Este ejemplo aún no tiene guion.')}</div></div>`,
+  );
 }
 
 document.querySelectorAll('.ejf').forEach((c) => (c.onclick = () => {
@@ -1238,10 +1664,12 @@ function renderProdGrid() {
       <div class="prod-b"><h4>${esc(p.name)}</h4><div class="price">${esc(p.price)}</div>
         <div class="meta"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3"/></svg>${p.media.images.length} fotos</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>${p.media.videos.length} videos</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v.5M12 8a2.5 2.5 0 0 1 1 4.8c-.6.3-1 .9-1 1.7M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/></svg>${(p.objeciones || []).length} objeciones</span></div>
       </div>`;
+    node.dataset.sid = p.id;
     node.onclick = () => openFicha(p.id, true);
-    node.appendChild(ebar('producto', p, { floating: true, name: `el producto “${p.name}”` }));
+    node.appendChild(ebar('producto', p, { floating: true, sort: true, name: `el producto “${p.name}”` }));
     g.appendChild(node);
   });
+  sortable(g, (ids) => saveOrder('/products', ids));
 }
 
 function openFicha(id, fresh) {
@@ -1325,6 +1753,122 @@ function openFicha(id, fresh) {
   if (fresh) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+/* ================= INFORMACIÓN DEL NEGOCIO ================= */
+function renderInfos() {
+  const list = document.getElementById('infoList');
+  list.innerHTML = '';
+  if (!S.infos.length) list.innerHTML = emptyBox('Todavía no hay información cargada. Activa “Editar” y añade el primer bloque.');
+  S.infos.forEach((x) => {
+    const links = (x.links || []).map((l) =>
+      `<a class="ilink" href="${esc(l.u)}" target="_blank" rel="noopener noreferrer">${ICON.upload}${esc(l.t)}</a>`).join('');
+    const node = el('div', 'info-card');
+    node.dataset.sid = x.id;
+    node.innerHTML = `<div class="ihead"><h3>${esc(x.title)}</h3>${x.tag ? `<span class="itag">${esc(x.tag)}</span>` : ''}</div>
+      <div class="ibody">${rich(x.body)}</div>${links ? `<div class="ilinks">${links}</div>` : ''}`;
+    node.appendChild(ebar('info', x, { sort: true, name: `el bloque “${x.title}”` }));
+    list.appendChild(node);
+  });
+  sortable(list, (ids) => saveOrder('/infos', ids));
+}
+
+/* ================= SOPORTE ================= */
+let dudaFilter = 'all', askShotUrl = '';
+
+function renderAsk() {
+  const t = document.getElementById('askThumb');
+  t.innerHTML = askShotUrl
+    ? `<div class="thumb"><img src="${esc(askShotUrl)}" alt=""><span>Captura lista</span><button class="iconbtn danger" id="askShotDel" type="button" title="Quitar">${ICON.x}</button></div>`
+    : '';
+  const del = document.getElementById('askShotDel');
+  if (del) del.onclick = () => { askShotUrl = ''; renderAsk(); };
+}
+
+function renderDudas() {
+  const list = document.getElementById('dudaList');
+  list.innerHTML = '';
+  const abiertas = S.dudas.filter((d) => d.estado === 'abierta').length;
+  const badge = document.getElementById('dudasBadge');
+  badge.style.display = abiertas ? 'inline-block' : 'none';
+  badge.textContent = abiertas;
+
+  const arr = S.dudas.filter((d) => dudaFilter === 'all' || d.estado === dudaFilter);
+  if (!arr.length) { list.innerHTML = emptyBox(dudaFilter === 'all' ? 'Todavía no hay dudas registradas.' : 'No hay dudas con este estado.'); return; }
+  arr.forEach((d) => {
+    const node = el('div', 'duda');
+    node.innerHTML = `<div class="dhead"><span class="dwho">${esc(initial(d.autor))}</span><span class="dname">${esc(d.autor)}</span><span class="dwhen">${esc(fechaCorta(d.created))}</span><span class="dstate ${esc(d.estado)}">${d.estado === 'resuelta' ? 'Resuelta' : 'Abierta'}</span></div>
+      <div class="dtext">${rich(d.texto)}</div>
+      ${d.url ? `<img class="dshot" src="${esc(d.url)}" alt="Captura de la duda" loading="lazy">` : ''}
+      ${d.respuesta ? `<div class="dans"><b>Respuesta</b>${rich(d.respuesta)}</div>` : ''}
+      <div class="dacts"></div>`;
+    if (d.url) node.querySelector('.dshot').onclick = () => openImage(d.url, 'Captura de la duda');
+
+    const acts = node.querySelector('.dacts');
+    const mk = (txt, fn, cls) => {
+      const b = el('button', 'fbtn' + (cls ? ' ' + cls : ''), esc(txt));
+      b.type = 'button';
+      b.onclick = fn;
+      acts.appendChild(b);
+    };
+    mk(d.respuesta ? 'Editar respuesta' : 'Responder', () => responder(d), 'solid');
+    mk(d.estado === 'resuelta' ? 'Reabrir' : 'Marcar resuelta', async () => {
+      try { await api('PUT', `/dudas/${d.id}/estado`, { estado: d.estado === 'resuelta' ? 'abierta' : 'resuelta' }); await reload(); }
+      catch (err) { toast(err.message); }
+    });
+    mk('Editar', () => openEditor('duda', d));
+    mk('Eliminar', () => deleteItem('duda', d.id, 'esta duda'));
+    list.appendChild(node);
+  });
+}
+
+function responder(d) {
+  openForm({
+    title: 'Responder la duda',
+    sub: d.autor,
+    fields: [{ k: 'respuesta', label: 'Respuesta', type: 'area', rows: 6, rich: true, hint: 'Al guardar, la duda queda marcada como resuelta. Si la dejas vacía, vuelve a abrirse.' }],
+    value: { respuesta: d.respuesta || '' },
+    onSave: async (vals) => { await api('PUT', `/dudas/${d.id}/respuesta`, vals); await reload(); },
+  });
+}
+
+document.getElementById('askShot').onclick = async () => {
+  try {
+    const f = await pickFile('image/*');
+    if (!f) return;
+    const up = await uploadFile(f);
+    askShotUrl = up.url;
+    renderAsk();
+    toast('Captura adjuntada');
+  } catch (err) { toast(err.message); }
+};
+document.getElementById('askSend').onclick = async () => {
+  const ta = document.getElementById('askText'), who = document.getElementById('askWho');
+  const texto = ta.value.trim();
+  if (!texto) return flash(ta);
+  try {
+    await api('POST', '/dudas', { autor: who.value.trim(), texto, url: askShotUrl });
+    ta.value = '';
+    askShotUrl = '';
+    try { localStorage.setItem('nova_autor', who.value.trim()); } catch { /* modo privado */ }
+    renderAsk();
+    await reload();
+    toast('Duda enviada. Queda registrada para el equipo.');
+  } catch (err) { toast(err.message); }
+};
+// Pegar una captura directamente en el cuadro de la duda.
+document.getElementById('askText').addEventListener('paste', async (ev) => {
+  const f = [...(ev.clipboardData?.files || [])].find((x) => x.type.startsWith('image/'));
+  if (!f) return;
+  ev.preventDefault();
+  try { const up = await uploadFile(f); askShotUrl = up.url; renderAsk(); toast('Captura adjuntada'); }
+  catch (err) { toast(err.message); }
+});
+document.querySelectorAll('#dudaFilters .ejf').forEach((c) => (c.onclick = () => {
+  document.querySelectorAll('#dudaFilters .ejf').forEach((x) => x.classList.remove('active'));
+  c.classList.add('active');
+  dudaFilter = c.dataset.d;
+  renderDudas();
+}));
+
 /* ================= NAVEGACIÓN ================= */
 const sidebar = document.getElementById('sidebar');
 const scrim = document.getElementById('scrim');
@@ -1374,6 +1918,7 @@ document.getElementById('addCheck').onclick = () => openEditor('check');
 document.getElementById('addProc').onclick = () => openEditor('proceso');
 document.getElementById('addProd').onclick = () => openEditor('producto');
 document.getElementById('addEj').onclick = () => openEditor('ejemplo');
+document.getElementById('addInfo').onclick = () => openEditor('info');
 
 /* ================= RENDER GLOBAL ================= */
 function renderAll() {
@@ -1384,6 +1929,9 @@ function renderAll() {
   renderProcesos();
   renderProdGrid();
   renderEjemplos();
+  renderInfos();
+  renderDudas();
+  renderAsk();
   if (fichaId && S.products.some((p) => p.id === fichaId)) openFicha(fichaId, false);
   else showFichasGrid();
   placeTurno();
@@ -1402,6 +1950,7 @@ const reload = async () => { S = await api('GET', '/state'); renderAll(); };
   document.getElementById('hoyLabel').textContent = `Hoy · ${dd}/${m}/${y}`;
   const n = new Date();
   document.getElementById('simRange').value = Math.round((n.getHours() * 60 + n.getMinutes()) / 5) * 5;
+  try { document.getElementById('askWho').value = localStorage.getItem('nova_autor') || ''; } catch { /* modo privado */ }
   renderAll();
 })();
 </script>

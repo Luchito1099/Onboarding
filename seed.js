@@ -91,6 +91,21 @@ export const PRODUCTS = [
    argumentos:'Mismo enfoque que la tobillera: soporte y estabilidad, no promesas médicas.'}
 ];
 
+export const INFOS = [
+  {title:'Qué vendemos y a quién',tag:'Negocio',
+   body:'NOVAFLEX® vende soportes de compresión (tobillera, rodillera) por pago contra entrega en Lima y provincias.\n\nEl cliente típico llega por anuncio, pregunta por WhatsApp y decide en la misma conversación. Nadie paga por adelantado en Lima: paga cuando el producto llega a su puerta.',
+   links:[]},
+  {title:'Cómo funciona el pago contra entrega (COD)',tag:'Negocio',
+   body:'El cliente paga al recibir. Eso baja el riesgo percibido y es nuestro mejor argumento frente al **precio**.\n\nLima: sin adelanto, entrega por FenFung.\nProvincia: adelanto de S/30 que se descuenta del total, envío por courier con número de seguimiento.',
+   links:[]},
+  {title:'Horarios y cortes del día',tag:'Operación',
+   body:'**11:00 am** es el corte duro de Delivery Normal (FenFung) para pedidos de Lima del mismo día. Todo lo que no entró antes, sale al día siguiente.\n\nRegistra con 30–40 min de anticipación cuando hay varios pedidos.',
+   links:[]},
+  {title:'Reglas que no se negocian',tag:'Reglas',
+   body:'1. La talla se confirma **siempre** por WhatsApp, nunca se asume.\n2. Cliente con 2+ entregas fallidas: prepago total, sin excepción.\n3. Sin adelanto confirmado no se genera la guía de provincia.\n4. Nunca prometemos curar lesiones ni usamos la frase _protección médica_.',
+   links:[]},
+];
+
 export const EJEMPLOS = [
   {kind:'chat',title:'Cliente dice "está caro"',obj:'Objeción: precio',dur:'6 mensajes',desc:'Cómo bajar el precio percibido usando el pago contra entrega.',
    chat:[{s:'in',w:'Cliente',t:'Hola, me interesa la tobillera pero está un poco cara 😅'},{s:'out',w:'Vendedora',t:'¡Hola! Te entiendo 🙌 Justo lo bueno es que es pago contra entrega: pagas recién cuando lo recibes en tu puerta, sin riesgo.'},{s:'in',w:'Cliente',t:'Ah no sabía que era contra entrega'},{s:'out',w:'Vendedora',t:'Así es 👍 Y si llevas el pack de 2 te sale más económico por unidad. ¿Te muestro?'},{s:'in',w:'Cliente',t:'Ya pues, muéstrame el de 2'},{s:'out',w:'Vendedora',t:'Perfecto, el pack de 2 queda en S/99 con envío. ¿A qué distrito te lo envío?'}],

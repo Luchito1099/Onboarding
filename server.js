@@ -1,20 +1,24 @@
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
-import { join, extname, normalize, dirname } from 'node:path';
+import { join, extname, normalize, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { TASKS, VIDEOS, CHECKLIST, PROCESOS, PRODUCTS, EJEMPLOS } from './seed.js';
+import { TASKS, VIDEOS, CHECKLIST, PROCESOS, PRODUCTS, EJEMPLOS, INFOS } from './seed.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
+const UPLOADS = join(DATA_DIR, 'uploads');
 const TZ = process.env.TZ_APP || 'America/Lima';
-const VERSION = '2026-08-13-3';
+const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
+const VERSION = '2026-08-13-4';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
+mkdirSync(UPLOADS, { recursive: true });
 const db = new DatabaseSync(join(DATA_DIR, 'nova.db'));
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
@@ -34,6 +38,14 @@ CREATE TABLE IF NOT EXISTS media(
   FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS ejemplos(
   id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS attach(
+  id INTEGER PRIMARY KEY, owner TEXT NOT NULL, owner_id TEXT NOT NULL, kind TEXT NOT NULL,
+  title TEXT, url TEXT NOT NULL, ord INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS infos(
+  id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS dudas(
+  id INTEGER PRIMARY KEY, created TEXT, autor TEXT, texto TEXT, url TEXT DEFAULT '',
+  estado TEXT DEFAULT 'abierta', respuesta TEXT DEFAULT '');
 `);
 
 const count = (t) => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
@@ -48,16 +60,28 @@ seed('checklist', 'INSERT INTO checklist(ord,day,item) VALUES(?,?,?)', CHECKLIST
 seed('procesos', 'INSERT INTO procesos(ord,data) VALUES(?,?)', PROCESOS.map((p, i) => [i, JSON.stringify(p)]));
 seed('products', 'INSERT INTO products(id,ord,data) VALUES(?,?,?)', PRODUCTS.map((p, i) => [p.id, i, JSON.stringify(p)]));
 seed('ejemplos', 'INSERT INTO ejemplos(ord,data) VALUES(?,?)', EJEMPLOS.map((e, i) => [i, JSON.stringify(e)]));
+seed('infos', 'INSERT INTO infos(ord,data) VALUES(?,?)', INFOS.map((x, i) => [i, JSON.stringify(x)]));
 
 /* ================= ESTADO ================= */
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
+const attachOf = (rows, owner, id, kind) =>
+  rows.filter((a) => a.owner === owner && a.owner_id === String(id) && a.kind === kind)
+    .map(({ id: aid, kind: k, title, url }) => ({ id: aid, kind: k, title, url }));
+
+// Los procesos guardaban un solo video en la columna `url`; ahora viven en data.vids.
+const procVids = (data, url) => {
+  if (Array.isArray(data.vids)) return data.vids;
+  return url ? [{ url, nota: '' }] : [];
+};
 
 function getState() {
   const hoy = today();
   const media = db.prepare('SELECT id,product_id,kind,title,url FROM media ORDER BY id').all();
+  const att = db.prepare('SELECT id,owner,owner_id,kind,title,url FROM attach ORDER BY ord, id').all();
   return {
     hoy,
     version: VERSION,
+    maxUploadMb: MAX_MB,
     tasks: db.prepare('SELECT id,data,done_on FROM tasks ORDER BY ord').all()
       .map((r) => ({ id: r.id, ...JSON.parse(r.data), done: r.done_on === hoy })),
     videos: db.prepare('SELECT id,title,type,dur,guion,url FROM videos ORDER BY ord').all()
@@ -70,7 +94,10 @@ function getState() {
         return acc;
       }, []),
     procesos: db.prepare('SELECT id,data,url FROM procesos ORDER BY ord').all()
-      .map((r) => ({ id: r.id, ...JSON.parse(r.data), url: r.url || '' })),
+      .map((r) => {
+        const data = JSON.parse(r.data);
+        return { id: r.id, ...data, vids: procVids(data, r.url) };
+      }),
     products: db.prepare('SELECT id,data FROM products ORDER BY ord').all()
       .map((r) => ({
         ...JSON.parse(r.data),
@@ -81,7 +108,17 @@ function getState() {
         },
       })),
     ejemplos: db.prepare('SELECT id,data FROM ejemplos ORDER BY ord').all()
+      .map((r) => ({
+        id: r.id,
+        ...JSON.parse(r.data),
+        media: {
+          images: attachOf(att, 'ejemplo', r.id, 'image'),
+          audios: attachOf(att, 'ejemplo', r.id, 'audio'),
+        },
+      })),
+    infos: db.prepare('SELECT id,data FROM infos ORDER BY ord').all()
       .map((r) => ({ id: r.id, ...JSON.parse(r.data) })),
+    dudas: db.prepare('SELECT id,created,autor,texto,url,estado,respuesta FROM dudas ORDER BY id DESC').all(),
   };
 }
 
@@ -103,10 +140,11 @@ const strList = (v, max = 40, len = 400) =>
 const objList = (v, max, map) =>
   (Array.isArray(v) ? v : []).slice(0, max).map(map).filter(Boolean);
 
-// Sólo se aceptan links http(s); el front decide cómo incrustarlos (YouTube => iframe).
+// Se aceptan links http(s) y los archivos subidos a esta misma app (/uploads/…).
 const cleanUrl = (u) => {
   const s = String(u ?? '').trim();
   if (!s) return '';
+  if (/^\/uploads\/[\w.-]+$/.test(s)) return s;
   try {
     const p = new URL(s);
     return p.protocol === 'http:' || p.protocol === 'https:' ? s : null;
@@ -150,11 +188,21 @@ const normCheck = (b) => ({
   item: req(b.item, 300, 'el ítem'),
 });
 
+// Cada proceso admite hasta 2 videos, cada uno con su comentario. La posición importa:
+// si el 1 está vacío y el 2 lleno, el 2 sigue siendo el "Video 2"; sólo se podan los huecos del final.
+const trimVids = (arr) => {
+  while (arr.length && !arr[arr.length - 1].url && !arr[arr.length - 1].nota) arr.pop();
+  return arr;
+};
+const normVids = (v) => trimVids((Array.isArray(v) ? v : []).slice(0, 2)
+  .map((x) => ({ url: urlOrFail(x?.url), nota: text(x?.nota, 400) })));
+
 const normProceso = (b) => ({
   name: req(b.name, 160, 'el nombre'),
   when: str(b.when, 120),
   steps: strList(b.steps, 30, 300),
   tips: tips(b.tips),
+  vids: normVids(b.vids),
 });
 
 const normProducto = (b) => ({
@@ -187,6 +235,7 @@ const normEjemplo = (b) => {
     dur: str(b.dur, 30),
     desc: text(b.desc, 500),
     learn: text(b.learn, 900),
+    guion: strList(b.guion, 30, 300), // estructura de la llamada, se muestra en un pop-up
   };
   if (kind === 'chat') {
     e.chat = objList(b.chat, 40, (m) => {
@@ -200,6 +249,16 @@ const normEjemplo = (b) => {
   }
   return e;
 };
+
+const normInfo = (b) => ({
+  title: req(b.title, 160, 'el título'),
+  tag: str(b.tag, 40),
+  body: text(b.body, 4000),
+  links: objList(b.links, 12, (l) => {
+    const t = str(l?.t, 120), u = cleanUrl(l?.u);
+    return u ? { t: t || u, u } : null;
+  }),
+});
 
 /* ================= HELPERS DE TABLA ================= */
 const nextOrd = (t) => db.prepare(`SELECT COALESCE(MAX(ord),-1)+1 n FROM ${t}`).get().n;
@@ -215,19 +274,25 @@ const removeRow = (t, id) => {
   db.prepare(`DELETE FROM ${t} WHERE id=?`).run(t === 'products' ? id : Number(id));
 };
 
-// Sube o baja una fila intercambiando el `ord` con su vecina dentro del mismo ámbito.
-function moveRow(t, id, dir, where = '', args = []) {
-  const row = must(t, id);
-  if (dir !== 'up' && dir !== 'down') throw new HttpError(400, 'Dirección inválida');
-  const cmp = dir === 'up' ? '<' : '>';
-  const order = dir === 'up' ? 'DESC' : 'ASC';
-  const nb = db.prepare(`SELECT id, ord FROM ${t} WHERE ord ${cmp} ? ${where} ORDER BY ord ${order} LIMIT 1`)
-    .get(row.ord, ...args);
-  if (!nb) return false;
+// Guarda el orden que llega desde el arrastre: la posición en el array es el nuevo `ord`.
+function setOrder(t, ids, isText) {
+  const list = (Array.isArray(ids) ? ids : []).slice(0, 500);
+  if (!list.length) throw new HttpError(400, 'Orden vacío');
   const up = db.prepare(`UPDATE ${t} SET ord=? WHERE id=?`);
-  up.run(nb.ord, row.id);
-  up.run(row.ord, nb.id);
-  return true;
+  list.forEach((id, i) => up.run(i, isText ? String(id) : Number(id)));
+  return list.length;
+}
+
+// El checklist se reordena dentro de un día sin mover los demás grupos de sitio.
+function setChecklistOrder(ids) {
+  const wanted = (Array.isArray(ids) ? ids : []).map(Number);
+  if (!wanted.length) throw new HttpError(400, 'Orden vacío');
+  const rows = db.prepare('SELECT id, day FROM checklist ORDER BY ord').all();
+  const day = rows.find((r) => r.id === wanted[0])?.day;
+  if (day === undefined) throw new HttpError(404, 'No existe');
+  const queue = wanted.filter((id) => rows.some((r) => r.id === id && r.day === day));
+  const final = rows.map((r) => (r.day === day ? queue.shift() ?? r.id : r.id));
+  return setOrder('checklist', final);
 }
 
 // El runbook siempre se muestra en orden cronológico: el `ord` se recalcula por hora.
@@ -247,6 +312,46 @@ const freeId = (base) => {
   return id;
 };
 
+/* ================= ARCHIVOS SUBIDOS ================= */
+const EXT = {
+  'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif',
+  'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a',
+  'audio/aac': '.aac', 'audio/ogg': '.ogg', 'audio/wav': '.wav', 'audio/x-wav': '.wav', 'audio/webm': '.weba',
+  'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
+};
+const MIME_BY_EXT = Object.fromEntries(Object.entries(EXT).map(([m, e]) => [e, m]));
+
+const readRaw = (request, limit) => new Promise((resolve, reject) => {
+  const chunks = [];
+  let size = 0;
+  request.on('data', (c) => {
+    size += c.length;
+    if (size > limit) { reject(new HttpError(413, `El archivo supera el límite de ${MAX_MB} MB`)); request.destroy(); return; }
+    chunks.push(c);
+  });
+  request.on('end', () => resolve(Buffer.concat(chunks)));
+  request.on('error', reject);
+});
+
+async function handleUpload(request, res) {
+  const type = String(request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const ext = EXT[type];
+  if (!ext) throw new HttpError(415, 'Formato no admitido. Usa imagen (png/jpg/webp), audio (mp3/m4a/ogg/wav) o video (mp4/webm).');
+  const buf = await readRaw(request, MAX_MB * 1024 * 1024);
+  if (!buf.length) throw new HttpError(400, 'Archivo vacío');
+  const name = randomUUID() + ext;
+  await writeFile(join(UPLOADS, name), buf);
+  const kind = type.startsWith('image/') ? 'image' : type.startsWith('audio/') ? 'audio' : 'video';
+  return json(res, 201, { url: '/uploads/' + name, kind, size: buf.length });
+}
+
+// Borra el archivo físico cuando se quita la referencia (si es un archivo nuestro).
+const dropUpload = async (url) => {
+  const m = /^\/uploads\/([\w.-]+)$/.exec(String(url || ''));
+  if (!m) return;
+  await unlink(join(UPLOADS, basename(m[1]))).catch(() => {});
+};
+
 /* ================= HTTP ================= */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png' };
 
@@ -255,11 +360,11 @@ const json = (res, code, body) => {
   res.end(body === undefined ? '' : JSON.stringify(body));
 };
 
-const readBody = (req_) => new Promise((resolve, reject) => {
+const readBody = (request) => new Promise((resolve, reject) => {
   let raw = '';
-  req_.on('data', (c) => { raw += c; if (raw.length > 2e5) { reject(new HttpError(413, 'Contenido demasiado grande')); req_.destroy(); } });
-  req_.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new HttpError(400, 'json inválido')); } });
-  req_.on('error', reject);
+  request.on('data', (c) => { raw += c; if (raw.length > 3e5) { reject(new HttpError(413, 'Contenido demasiado grande')); request.destroy(); } });
+  request.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new HttpError(400, 'json inválido')); } });
+  request.on('error', reject);
 });
 
 const ok = (res) => json(res, 200, { ok: true });
@@ -268,6 +373,9 @@ async function api(request, res, path) {
   const seg = path.split('/').filter(Boolean).slice(1); // sin 'api'
   const [ent, id, sub] = seg;
   const M = request.method;
+
+  if (ent === 'uploads' && M === 'POST') return handleUpload(request, res);
+
   const body = M === 'GET' ? {} : await readBody(request);
 
   if (M === 'GET' && ent === 'state' && !id) return json(res, 200, getState());
@@ -295,6 +403,7 @@ async function api(request, res, path) {
 
   /* ---------- VIDEOS DE ONBOARDING ---------- */
   if (ent === 'videos') {
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('videos', body.ids) });
     if (M === 'POST' && !id) {
       const v = normVideo(body);
       const r = db.prepare('INSERT INTO videos(ord,title,type,dur,guion,url) VALUES(?,?,?,?,?,?)')
@@ -302,11 +411,12 @@ async function api(request, res, path) {
       return json(res, 201, { id: Number(r.lastInsertRowid) });
     }
     if (M === 'PUT' && id && sub === 'url') {
-      must('videos', id);
-      db.prepare('UPDATE videos SET url=? WHERE id=?').run(urlOrFail(body.url), Number(id));
+      const old = must('videos', id);
+      const url = urlOrFail(body.url);
+      if (old.url !== url) await dropUpload(old.url);
+      db.prepare('UPDATE videos SET url=? WHERE id=?').run(url, Number(id));
       return ok(res);
     }
-    if (M === 'PUT' && id && sub === 'move') return json(res, 200, { moved: moveRow('videos', id, body.dir) });
     if (M === 'PUT' && id && !sub) {
       must('videos', id);
       const v = normVideo(body);
@@ -314,11 +424,17 @@ async function api(request, res, path) {
         .run(v.title, v.type, v.dur, v.guion, v.url, Number(id));
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) { removeRow('videos', id); return ok(res); }
+    if (M === 'DELETE' && id && !sub) {
+      const old = must('videos', id);
+      await dropUpload(old.url);
+      removeRow('videos', id);
+      return ok(res);
+    }
   }
 
   /* ---------- CHECKLIST ---------- */
   if (ent === 'checklist') {
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setChecklistOrder(body.ids) });
     if (M === 'POST' && !id) {
       const c = normCheck(body);
       // El ítem nuevo entra al final de su día; si el día no existe, al final de todo.
@@ -338,10 +454,6 @@ async function api(request, res, path) {
       db.prepare('UPDATE checklist SET done=? WHERE id=?').run(body.done ? 1 : 0, Number(id));
       return ok(res);
     }
-    if (M === 'PUT' && id && sub === 'move') {
-      const row = must('checklist', id);
-      return json(res, 200, { moved: moveRow('checklist', id, body.dir, 'AND day=?', [row.day]) });
-    }
     if (M === 'PUT' && id && !sub) {
       must('checklist', id);
       const c = normCheck(body);
@@ -353,28 +465,48 @@ async function api(request, res, path) {
 
   /* ---------- PROCESOS ---------- */
   if (ent === 'procesos') {
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('procesos', body.ids) });
     if (M === 'POST' && !id) {
+      const p = normProceso(body);
       const r = db.prepare('INSERT INTO procesos(ord,data,url) VALUES(?,?,?)')
-        .run(nextOrd('procesos'), JSON.stringify(normProceso(body)), urlOrFail(body.url));
+        .run(nextOrd('procesos'), JSON.stringify(p), p.vids[0]?.url || '');
       return json(res, 201, { id: Number(r.lastInsertRowid) });
     }
-    if (M === 'PUT' && id && sub === 'url') {
-      must('procesos', id);
-      db.prepare('UPDATE procesos SET url=? WHERE id=?').run(urlOrFail(body.url), Number(id));
+    // Guardado rápido de un video suelto (1 o 2) sin abrir el editor completo.
+    if (M === 'PUT' && id && sub === 'video') {
+      const row = must('procesos', id);
+      const data = JSON.parse(row.data);
+      const vids = procVids(data, row.url);
+      const n = Number(body.n) === 2 ? 1 : 0;
+      const url = urlOrFail(body.url);
+      while (vids.length < n) vids.push({ url: '', nota: '' });
+      const old = vids[n]?.url;
+      const next = { url, nota: text(body.nota, 400) };
+      if (old && old !== url) await dropUpload(old);
+      if (n < vids.length) vids[n] = next; else vids.push(next);
+      data.vids = trimVids(vids);
+      db.prepare('UPDATE procesos SET data=?, url=? WHERE id=?')
+        .run(JSON.stringify(data), data.vids[0]?.url || '', Number(id));
       return ok(res);
     }
-    if (M === 'PUT' && id && sub === 'move') return json(res, 200, { moved: moveRow('procesos', id, body.dir) });
     if (M === 'PUT' && id && !sub) {
       must('procesos', id);
+      const p = normProceso(body);
       db.prepare('UPDATE procesos SET data=?, url=? WHERE id=?')
-        .run(JSON.stringify(normProceso(body)), urlOrFail(body.url), Number(id));
+        .run(JSON.stringify(p), p.vids[0]?.url || '', Number(id));
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) { removeRow('procesos', id); return ok(res); }
+    if (M === 'DELETE' && id && !sub) {
+      const row = must('procesos', id);
+      for (const v of procVids(JSON.parse(row.data), row.url)) await dropUpload(v.url);
+      removeRow('procesos', id);
+      return ok(res);
+    }
   }
 
   /* ---------- PRODUCTOS + MEDIA ---------- */
   if (ent === 'products') {
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('products', body.ids, true) });
     if (M === 'POST' && !id) {
       const p = normProducto(body);
       const newId = freeId(slug(p.name));
@@ -390,7 +522,6 @@ async function api(request, res, path) {
         .run(id, kind, str(body.title, 120) || (kind === 'video' ? 'Video' : 'Imagen'), url);
       return json(res, 201, { id: Number(r.lastInsertRowid) });
     }
-    if (M === 'PUT' && id && sub === 'move') return json(res, 200, { moved: moveRow('products', id, body.dir) });
     if (M === 'PUT' && id && !sub) {
       must('products', id);
       db.prepare('UPDATE products SET data=? WHERE id=?').run(JSON.stringify(normProducto(body)), id);
@@ -398,6 +529,7 @@ async function api(request, res, path) {
     }
     if (M === 'DELETE' && id && !sub) {
       must('products', id);
+      for (const m of db.prepare('SELECT url FROM media WHERE product_id=?').all(id)) await dropUpload(m.url);
       db.prepare('DELETE FROM media WHERE product_id=?').run(id);
       db.prepare('DELETE FROM products WHERE id=?').run(id);
       return ok(res);
@@ -405,24 +537,96 @@ async function api(request, res, path) {
   }
 
   if (ent === 'media' && M === 'DELETE' && id) {
-    must('media', id);
+    const row = must('media', id);
+    await dropUpload(row.url);
     db.prepare('DELETE FROM media WHERE id=?').run(Number(id));
     return ok(res);
   }
 
   /* ---------- EJEMPLOS REALES ---------- */
   if (ent === 'ejemplos') {
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('ejemplos', body.ids) });
     if (M === 'POST' && !id) {
       const r = db.prepare('INSERT INTO ejemplos(ord,data) VALUES(?,?)').run(nextOrd('ejemplos'), JSON.stringify(normEjemplo(body)));
       return json(res, 201, { id: Number(r.lastInsertRowid) });
     }
-    if (M === 'PUT' && id && sub === 'move') return json(res, 200, { moved: moveRow('ejemplos', id, body.dir) });
+    // Capturas de conversación y audios de la llamada.
+    if (M === 'POST' && id && sub === 'attach') {
+      must('ejemplos', id);
+      const kind = oneOf(body.kind, ['image', 'audio'], 'image');
+      const url = urlOrFail(body.url);
+      if (!url) throw new HttpError(400, 'Falta el archivo o el link');
+      const r = db.prepare('INSERT INTO attach(owner,owner_id,kind,title,url,ord) VALUES(?,?,?,?,?,?)')
+        .run('ejemplo', String(id), kind, str(body.title, 120) || (kind === 'audio' ? 'Audio' : 'Captura'), url, nextOrd('attach'));
+      return json(res, 201, { id: Number(r.lastInsertRowid) });
+    }
     if (M === 'PUT' && id && !sub) {
       must('ejemplos', id);
       db.prepare('UPDATE ejemplos SET data=? WHERE id=?').run(JSON.stringify(normEjemplo(body)), Number(id));
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) { removeRow('ejemplos', id); return ok(res); }
+    if (M === 'DELETE' && id && !sub) {
+      must('ejemplos', id);
+      for (const a of db.prepare('SELECT url FROM attach WHERE owner=? AND owner_id=?').all('ejemplo', String(id))) await dropUpload(a.url);
+      db.prepare('DELETE FROM attach WHERE owner=? AND owner_id=?').run('ejemplo', String(id));
+      removeRow('ejemplos', id);
+      return ok(res);
+    }
+  }
+
+  if (ent === 'attach' && M === 'DELETE' && id) {
+    const row = must('attach', id);
+    await dropUpload(row.url);
+    db.prepare('DELETE FROM attach WHERE id=?').run(Number(id));
+    return ok(res);
+  }
+
+  /* ---------- INFORMACIÓN DEL NEGOCIO ---------- */
+  if (ent === 'infos') {
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('infos', body.ids) });
+    if (M === 'POST' && !id) {
+      const r = db.prepare('INSERT INTO infos(ord,data) VALUES(?,?)').run(nextOrd('infos'), JSON.stringify(normInfo(body)));
+      return json(res, 201, { id: Number(r.lastInsertRowid) });
+    }
+    if (M === 'PUT' && id && !sub) {
+      must('infos', id);
+      db.prepare('UPDATE infos SET data=? WHERE id=?').run(JSON.stringify(normInfo(body)), Number(id));
+      return ok(res);
+    }
+    if (M === 'DELETE' && id && !sub) { removeRow('infos', id); return ok(res); }
+  }
+
+  /* ---------- SOPORTE: DUDAS DE LA ASESORA ---------- */
+  if (ent === 'dudas') {
+    if (M === 'POST' && !id) {
+      const r = db.prepare('INSERT INTO dudas(created,autor,texto,url,estado,respuesta) VALUES(?,?,?,?,?,?)')
+        .run(new Date().toISOString(), str(body.autor, 60) || 'Vendedora', req(body.texto, 1500, 'la duda'), urlOrFail(body.url), 'abierta', '');
+      return json(res, 201, { id: Number(r.lastInsertRowid) });
+    }
+    if (M === 'PUT' && id && sub === 'estado') {
+      must('dudas', id);
+      db.prepare('UPDATE dudas SET estado=? WHERE id=?').run(oneOf(body.estado, ['abierta', 'resuelta'], 'abierta'), Number(id));
+      return ok(res);
+    }
+    if (M === 'PUT' && id && sub === 'respuesta') {
+      must('dudas', id);
+      const resp = text(body.respuesta, 1500);
+      db.prepare('UPDATE dudas SET respuesta=?, estado=? WHERE id=?')
+        .run(resp, resp ? 'resuelta' : 'abierta', Number(id));
+      return ok(res);
+    }
+    if (M === 'PUT' && id && !sub) {
+      must('dudas', id);
+      db.prepare('UPDATE dudas SET autor=?, texto=?, url=? WHERE id=?')
+        .run(str(body.autor, 60) || 'Vendedora', req(body.texto, 1500, 'la duda'), urlOrFail(body.url), Number(id));
+      return ok(res);
+    }
+    if (M === 'DELETE' && id && !sub) {
+      const row = must('dudas', id);
+      await dropUpload(row.url);
+      removeRow('dudas', id);
+      return ok(res);
+    }
   }
 
   throw new HttpError(404, 'No encontrado');
@@ -434,6 +638,18 @@ const server = createServer(async (request, res) => {
     if (path === '/health') return json(res, 200, { ok: true, version: VERSION });
     if (path.startsWith('/api/')) return await api(request, res, path);
     if (request.method !== 'GET' && request.method !== 'HEAD') return json(res, 405, { error: 'Método no permitido' });
+
+    // Archivos subidos por el equipo (viven en el volumen persistente, junto a la base).
+    if (path.startsWith('/uploads/')) {
+      const name = basename(normalize(path));
+      if (!/^[\w.-]+$/.test(name)) return json(res, 403, { error: 'Prohibido' });
+      const buf = await readFile(join(UPLOADS, name));
+      res.writeHead(200, {
+        'content-type': MIME_BY_EXT[extname(name)] || 'application/octet-stream',
+        'cache-control': 'public, max-age=31536000, immutable',
+      });
+      return res.end(request.method === 'HEAD' ? undefined : buf);
+    }
 
     const rel = normalize(path === '/' ? '/index.html' : path).replace(/^([/\\.]+)/, '');
     const file = join(PUBLIC, rel);
