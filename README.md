@@ -5,10 +5,10 @@ Node 24 sin dependencias npm + SQLite embebido (`node:sqlite`). Imagen Docker ~8
 
 ## Qué hace
 
-- **Onboarding** — videos de lanzamiento con su guion. Pegas el link de YouTube o subes el archivo.
+- **Onboarding** — videos de lanzamiento con su guion. Pegas el link de YouTube o de Google Drive, o subes el archivo.
 - **Runbook diario** — tareas por hora con pasos y tips. El "completado" se resetea solo cada día (zona horaria `TZ_APP`).
 - **Procesos** — paso a paso de cada proceso, con **hasta 2 videos, cada uno con su comentario**.
-- **Fichas de producto** — packs, beneficios, specs, objeciones + imágenes y videos por link.
+- **Fichas de producto** — packs, beneficios, specs, objeciones + imágenes y videos (YouTube o Drive).
 - **Ejemplos reales** — chats y llamadas modelo, con **capturas pegables**, **audio de la llamada** y un **guion en pop-up**.
 - **Información del negocio** — el contexto que hay que saber antes de operar.
 - **Soporte** — la vendedora escribe sus dudas (con captura) y se responden desde la misma pantalla.
@@ -30,6 +30,20 @@ Detalles de comportamiento:
 Los campos de contenido llevan botones **B** / *i* junto a su etiqueta. Selecciona el texto y pulsa el botón, o usa **Ctrl+B** / **Ctrl+I**. Pulsar de nuevo sobre el texto ya formateado quita el formato.
 
 Por debajo se guarda como texto plano con marcadores, `**negrita**` y `_cursiva_`, así que también puedes escribirlos a mano. Al pintar, sólo se convierten esos marcadores y las etiquetas `<b>`, `<i>`, `<u>` y `<br>` que ya traía el contenido original: cualquier otro HTML se escapa y se muestra como texto, de modo que pegar algo en un campo no puede inyectar código en la página.
+
+## Videos: YouTube, Google Drive o archivo
+
+Cualquier campo de video acepta tres formas, y las tres se reproducen **dentro de la app**:
+
+| Fuente | Cómo se pega | Cómo se ve |
+|---|---|---|
+| YouTube | cualquier formato de link (`youtu.be`, `watch?v=`, `shorts`, `embed`) | iframe `youtube-nocookie` |
+| Google Drive | el link de compartir tal cual (`/file/d/…/view?usp=drive_link`) | vista previa de Drive incrustada, con miniatura |
+| Archivo propio | botón **Subir archivo** | reproductor `<video>` nativo |
+
+Para que un video de Drive se vea, el archivo debe estar compartido como **“Cualquiera con el enlace”**; si no, Drive muestra su pantalla de permisos dentro del marco. Si la miniatura no carga por permisos, la tarjeta cae al icono por defecto sin romperse.
+
+Un link que no sea de ninguna de las tres se guarda igual y se ofrece como enlace externo.
 
 ## Archivos: links o subida
 

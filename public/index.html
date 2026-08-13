@@ -410,7 +410,8 @@
   .fld{display:flex;flex-direction:column;gap:5px;grid-column:1/-1;min-width:0}
   .fld.half{grid-column:span 1}
   .fld label{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted-2)}
-  .fld .hint{font-size:11px;color:var(--muted-2);font-weight:500;line-height:1.4}
+  .hint,.fld .hint{font-size:11px;color:var(--muted-2);font-weight:500;line-height:1.45}
+  .linkrow + .hint,.vslot .hint{margin-top:7px}
   .fld input,.fld textarea,.fld select,.rw input,.rw textarea,.rw select{border:1px solid var(--line-2);border-radius:9px;padding:10px 11px;font-family:inherit;font-size:13.5px;background:var(--surface);color:var(--text);width:100%;outline:none;min-width:0}
   .fld input:focus,.fld textarea:focus,.fld select:focus,.rw input:focus,.rw textarea:focus,.rw select:focus{border-color:var(--accent)}
   .fld textarea{resize:vertical;min-height:80px;line-height:1.5}
@@ -638,7 +639,7 @@
         <!-- ===== FICHAS ===== -->
         <section class="view" id="view-fichas">
           <div id="fichasGrid">
-            <div class="panel-head"><h2>Fichas de producto</h2><p>Toda la info para vender cada producto: fotos, <b>videos de YouTube que explican el producto</b>, beneficios y cómo responder objeciones.</p></div>
+            <div class="panel-head"><h2>Fichas de producto</h2><p>Toda la info para vender cada producto: fotos, <b>videos que explican el producto</b> (YouTube o Google Drive), beneficios y cómo responder objeciones.</p></div>
             <div class="prod-grid" id="prodGrid"></div>
             <button class="add" id="addProd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Añadir producto</button>
           </div>
@@ -751,6 +752,21 @@ function wrapSel(node, mark) {
 const ytId = (url) => { const m = String(url || '').match(/(?:youtu\.be\/|[?&]v=|embed\/|shorts\/|live\/)([\w-]{11})/); return m ? m[1] : null; };
 const ytEmbed = (url) => { const id = ytId(url); return id ? 'https://www.youtube-nocookie.com/embed/' + id : null; };
 const ytThumb = (url) => { const id = ytId(url); return id ? 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg' : null; };
+// Google Drive: el link para compartir se convierte en el de vista previa incrustable.
+const driveId = (url) => {
+  const s = String(url || '');
+  if (!/(?:drive|docs)\.google\.com/.test(s)) return null;
+  const m = s.match(/\/file\/d\/([\w-]{10,})/) || s.match(/[?&]id=([\w-]{10,})/);
+  return m ? m[1] : null;
+};
+const driveEmbed = (url) => { const id = driveId(url); return id ? `https://drive.google.com/file/d/${id}/preview` : null; };
+const driveThumb = (url) => { const id = driveId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w480` : null; };
+const embedFor = (url) => ytEmbed(url) || driveEmbed(url);
+const thumbFor = (url) => ytThumb(url) || driveThumb(url);
+const fuente = (url) => (isUpload(url) ? 'archivo subido' : driveId(url) ? 'Google Drive' : ytId(url) ? 'YouTube' : '');
+const linkOk = (u) => { try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:'; } catch { return false; } };
+// Las miniaturas de Drive fallan si el archivo no está compartido: en ese caso se quitan.
+const killBroken = (root) => root.querySelectorAll('img[data-fallback]').forEach((i) => { i.onerror = () => i.remove(); });
 const toMin = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 const fmt = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 const prioName = { crit: 'Prioridad alta', imp: 'Prioridad media', reg: 'Prioridad normal' };
@@ -889,13 +905,15 @@ const modalHead = (title, sub, color, icon, closeId) =>
   `<div class="modal-head"><div class="mi" style="background:${color}">${icon}</div><div class="mtxt"><b>${esc(title)}</b><span>${esc(sub)}</span></div><button class="close" id="${closeId || 'modalClose'}" aria-label="Cerrar">${ICON.x}</button></div>`;
 
 function openVideo(url, title, sub) {
-  const emb = ytEmbed(url);
+  const yt = ytEmbed(url), dr = driveEmbed(url);
   const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>';
-  const body = emb
-    ? `<div class="frame"><iframe src="${esc(emb)}?rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
-    : isVideoFile(url)
-      ? `<div class="frame"><video src="${esc(url)}" controls autoplay playsinline></video></div>`
-      : `<div class="extlink">Este link no es de YouTube, se abre aparte: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
+  const body = yt
+    ? `<div class="frame"><iframe src="${esc(yt)}?rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
+    : dr
+      ? `<div class="frame"><iframe src="${esc(dr)}" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`
+      : isVideoFile(url)
+        ? `<div class="frame"><video src="${esc(url)}" controls autoplay playsinline></video></div>`
+        : `<div class="extlink">Este link no se puede incrustar, se abre aparte: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
   openModal(modalHead(title, sub || 'Video', '#0d9488', icon) + `<div class="modal-body flush">${body}</div>`, true);
 }
 
@@ -1147,7 +1165,7 @@ const SCHEMAS = {
       { k: 'when', label: 'Cuándo se usa', ph: 'En cada confirmación' },
       { k: 'steps', label: 'Paso a paso', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir', rich: true },
       TIPS_FIELD,
-      { k: 'vids', label: 'Videos', type: 'objlist', addLabel: 'Añadir video', rich: true, hint: 'Hasta 2 videos. También puedes subir archivos desde la tarjeta del proceso.', sub: [{ k: 'url', ph: 'Link de YouTube', w: '210px' }, { k: 'nota', ph: 'Comentario breve' }] },
+      { k: 'vids', label: 'Videos', type: 'objlist', addLabel: 'Añadir video', rich: true, hint: 'Hasta 2 videos: YouTube o Google Drive. También puedes subir archivos desde la tarjeta del proceso.', sub: [{ k: 'url', ph: 'Link de YouTube o Drive', w: '210px' }, { k: 'nota', ph: 'Comentario breve' }] },
     ],
   },
   producto: {
@@ -1338,8 +1356,10 @@ document.getElementById('simRange').addEventListener('input', simulate);
 /* ================= PROCESOS ================= */
 // Reproductor: YouTube va en iframe; un archivo subido va en <video>; otro link se abre aparte.
 function playerHTML(url) {
-  const emb = ytEmbed(url);
-  if (emb) return `<div class="player"><iframe src="${esc(emb)}?rel=0" allowfullscreen></iframe></div>`;
+  const yt = ytEmbed(url);
+  if (yt) return `<div class="player"><iframe src="${esc(yt)}?rel=0" allowfullscreen></iframe></div>`;
+  const dr = driveEmbed(url);
+  if (dr) return `<div class="player"><iframe src="${esc(dr)}" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`;
   if (isVideoFile(url)) return `<div class="player"><video src="${esc(url)}" controls preload="metadata"></video></div>`;
   if (url) return `<div class="extlink">Este link no se puede incrustar: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
   return '';
@@ -1361,7 +1381,7 @@ function renderProcesos() {
         ${playerHTML(v.url)}
         ${v.nota ? `<div class="vnota">${rich(v.nota)}</div>` : ''}
         <div class="vedit">
-          <div class="linkrow"><input class="vurl" placeholder="Link de YouTube…" value="${esc(v.url && !isUpload(v.url) ? v.url : '')}"><button class="fbtn vfile" type="button">${ICON.upload}Subir archivo</button></div>
+          <div class="linkrow"><input class="vurl" placeholder="Link de YouTube o de Google Drive…" value="${esc(v.url && !isUpload(v.url) ? v.url : '')}"><button class="fbtn vfile" type="button">${ICON.upload}Subir archivo</button></div>
           <div class="linkrow"><input class="vcomment" placeholder="Comentario breve del video (opcional)" value="${esc(v.nota)}"><button class="vsave" type="button">${svgPlus}Guardar</button></div>
           ${v.url ? `<div class="linkrow"><button class="fbtn vclear" type="button">Quitar este video</button>${isUpload(v.url) ? `<span class="orsep">Archivo subido</span>` : ''}</div>` : ''}
         </div>
@@ -1373,6 +1393,7 @@ function renderProcesos() {
       <div class="proc-body"><div class="pin">${stepsHTML ? `<div class="subh">Paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${tipsHTML ? `<div class="subh">Tips</div><div class="tips">${tipsHTML}</div>` : ''}
         <div class="subh">Videos del proceso</div>
         ${slot(0)}${slot(1)}
+        <div class="hint vedit">Acepta YouTube, Google Drive o un archivo subido. Los videos de Drive deben estar compartidos como “Cualquiera con el enlace” para poder verse aquí dentro.</div>
       </div></div>`;
     node.querySelector('.proc-head').onclick = () => node.classList.toggle('open');
     node.querySelector('.proc-head').insertBefore(ebar('proceso', p, { sort: true, name: `el proceso “${p.name}”` }), node.querySelector('.proc-head .chev'));
@@ -1388,7 +1409,7 @@ function renderProcesos() {
         e.stopPropagation();
         const url = urlInp.value.trim();
         const actual = (p.vids || [])[n - 1] || {};
-        if (url && !ytId(url)) return flash(urlInp);
+        if (url && !linkOk(url)) return flash(urlInp);
         // Si ya hay un archivo subido y el campo de link está vacío, se conserva el archivo.
         save(url || (isUpload(actual.url) ? actual.url : ''), notaInp.value.trim());
       };
@@ -1419,15 +1440,16 @@ function renderVideos() {
   list.innerHTML = '';
   if (!S.videos.length) list.innerHTML = emptyBox('Aún no hay videos de onboarding.');
   S.videos.forEach((v) => {
-    const ready = !!v.url, thumb = ytThumb(v.url);
+    const ready = !!v.url, thumb = thumbFor(v.url), src = fuente(v.url);
     const node = el('div', 'video-card');
     node.dataset.sid = v.id;
-    node.innerHTML = `<div class="vc-top"><div class="vc-thumb ${ready ? 'ready' : 'pending'}">${thumb ? `<img src="${esc(thumb)}" alt="">` : ''}${ready ? `<div class="pl">${svgPlay}</div>` : '<div class="cam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg></div>'}<span class="dur">${esc(v.dur)}</span></div>
-      <div class="vc-info"><div class="vnum">Video ${v.n}</div><h4>${esc(v.title)}</h4><div class="vtype">${esc(v.type)}${isUpload(v.url) ? ' · archivo subido' : ''}</div></div>
+    node.innerHTML = `<div class="vc-top"><div class="vc-thumb ${ready ? 'ready' : 'pending'}">${thumb ? `<img src="${esc(thumb)}" alt="" data-fallback>` : ''}${ready ? `<div class="pl">${svgPlay}</div>` : '<div class="cam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg></div>'}<span class="dur">${esc(v.dur)}</span></div>
+      <div class="vc-info"><div class="vnum">Video ${v.n}</div><h4>${esc(v.title)}</h4><div class="vtype">${esc(v.type)}${src ? ` · ${src}` : ''}</div></div>
       <div class="vc-side"><span class="vc-status ${ready ? 'ready' : 'pending'}">${ready ? 'Listo' : 'Por grabar'}</span></div></div>
       <div class="vc-guion"><div class="gtoggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Guion sugerido — qué narrar<span class="chev">${svgChev}</span></div>
       <div class="gbody"><div class="gin"><div class="glabel">Guion</div><p>${rich(v.guion)}</p>
-        <div class="linkrow"><input placeholder="Pega el link de YouTube…" value="${esc(!isUpload(v.url) ? v.url : '')}"><button>${svgPlus}${ready ? 'Actualizar link' : 'Guardar video'}</button><button class="fbtn vfile" type="button">${ICON.upload}Subir archivo</button></div>
+        <div class="linkrow"><input placeholder="Link de YouTube o de Google Drive…" value="${esc(!isUpload(v.url) ? v.url : '')}"><button>${svgPlus}${ready ? 'Actualizar link' : 'Guardar video'}</button><button class="fbtn vfile" type="button">${ICON.upload}Subir archivo</button></div>
+        <div class="hint">Si es de Drive, compártelo como “Cualquiera con el enlace” para que se vea aquí.</div>
       </div></div></div>`;
     node.querySelector('.gtoggle').onclick = () => node.classList.toggle('gopen');
     if (ready) node.querySelector('.vc-thumb').onclick = () => openVideo(v.url, v.title, `Video ${v.n} · ${v.dur}`);
@@ -1439,9 +1461,10 @@ function renderVideos() {
     };
     node.querySelector('.linkrow button').onclick = () => {
       const url = inp.value.trim();
-      if (url && !ytId(url)) return flash(inp);
+      if (url && !linkOk(url)) return flash(inp);
       saveUrl(url);
     };
+    killBroken(node);
     node.querySelector('.vfile').onclick = async () => {
       try {
         const f = await pickFile('video/mp4,video/webm,video/quicktime');
@@ -1689,7 +1712,7 @@ function openFicha(id, fresh) {
 
     <div class="media">
       <div class="media-tabs"><div class="mtab" data-m="images">Imágenes (${p.media.images.length})</div><div class="mtab" data-m="videos">Videos del producto (${p.media.videos.length})</div></div>
-      <div class="mhint" id="mhint">Videos de YouTube que explican el producto: cómo se usa, materiales, colocación. La vendedora los ve y le puede pasar el link al cliente.</div>
+      <div class="mhint" id="mhint">Videos que explican el producto: cómo se usa, materiales, colocación. Acepta YouTube y Google Drive (compartido como “Cualquiera con el enlace”). La vendedora los ve y le puede pasar el link al cliente.</div>
       <div class="mgrid" id="mediaGrid"></div>
       <div class="linkrow" id="mediaAdd"><input id="mediaTitle" placeholder="Título (opcional)" style="max-width:200px"><input id="mediaUrl" placeholder="Pega el link…"><button id="mediaBtn">${svgPlus}Agregar</button></div>
     </div>
@@ -1713,13 +1736,13 @@ function openFicha(id, fresh) {
     const grid = document.getElementById('mediaGrid');
     grid.innerHTML = '';
     document.getElementById('mhint').classList.toggle('show', fichaTab === 'videos');
-    document.getElementById('mediaUrl').placeholder = fichaTab === 'videos' ? 'Pega el link de YouTube…' : 'Pega el link de la imagen (https://…)';
+    document.getElementById('mediaUrl').placeholder = fichaTab === 'videos' ? 'Link de YouTube o de Google Drive…' : 'Pega el link de la imagen (https://…)';
     const arr = p.media[fichaTab];
     if (!arr.length) grid.innerHTML = `<div class="mempty">Aún no hay ${fichaTab === 'videos' ? 'videos' : 'imágenes'}. Agrega un link abajo.</div>`;
     arr.forEach((it) => {
       const tile = el('div', 'mtile' + (fichaTab === 'videos' ? ' vid' : ''));
-      const th = fichaTab === 'videos' ? ytThumb(it.url) : it.url;
-      tile.innerHTML = `${th ? `<img src="${esc(th)}" alt="">` : ''}${fichaTab === 'videos'
+      const th = fichaTab === 'videos' ? thumbFor(it.url) : it.url;
+      tile.innerHTML = `${th ? `<img src="${esc(th)}" alt="" data-fallback>` : ''}${fichaTab === 'videos'
         ? `<div class="play">${svgPlay}</div>`
         : th ? '' : `<div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 3-3 4 4"/><circle cx="8.5" cy="9.5" r="1.5"/></svg></div>`}
         <div class="del" title="Quitar">${ICON.x}</div><div class="mname">${esc(it.title)}</div>`;
@@ -1734,11 +1757,12 @@ function openFicha(id, fresh) {
       };
       grid.appendChild(tile);
     });
+    killBroken(grid);
   };
   const urlInp = document.getElementById('mediaUrl'), titleInp = document.getElementById('mediaTitle');
   document.getElementById('mediaBtn').onclick = async () => {
     const url = urlInp.value.trim();
-    if (!url || (fichaTab === 'videos' && !ytId(url))) return flash(urlInp);
+    if (!url || !linkOk(url)) return flash(urlInp);
     const title = titleInp.value.trim() || (fichaTab === 'videos' ? 'Video del producto' : 'Imagen del producto');
     try {
       const r = await api('POST', `/products/${p.id}/media`, { kind: kind(), title, url });

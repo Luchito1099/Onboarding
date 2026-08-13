@@ -14,7 +14,7 @@ const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const UPLOADS = join(DATA_DIR, 'uploads');
 const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
-const VERSION = '2026-08-13-4';
+const VERSION = '2026-08-13-5';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
