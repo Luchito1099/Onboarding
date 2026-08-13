@@ -1,0 +1,13 @@
+services:
+  onboarding:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      TZ_APP: America/Lima
+    volumes:
+      - onboarding-data:/data
+    restart: unless-stopped
+
+volumes:
+  onboarding-data:
