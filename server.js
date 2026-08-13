@@ -11,7 +11,7 @@ const PUBLIC = join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const TZ = process.env.TZ_APP || 'America/Lima';
-const VERSION = '2026-08-13-2';
+const VERSION = '2026-08-13-3';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });

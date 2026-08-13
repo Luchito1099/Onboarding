@@ -419,6 +419,14 @@
   .rw .chk{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;padding:0 4px;min-height:38px}
   .rw .chk input{width:18px;height:18px;accent-color:var(--accent)}
   .addrow{align-self:flex-start;background:var(--accent-soft);color:var(--accent-ink);border:none;border-radius:8px;padding:8px 13px;font-weight:700;font-size:12px;cursor:pointer}
+  .lblrow{display:flex;align-items:center;gap:8px;min-height:26px}
+  .fmtbar{display:flex;gap:4px;margin-left:auto}
+  .fmtbar button{width:30px;height:26px;border-radius:6px;border:1px solid var(--line-2);background:var(--surface);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+  .fmtbar button:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .fmtbar .fb{font-weight:800}
+  .fmtbar .fi{font-style:italic;font-family:Georgia,'Times New Roman',serif;font-weight:600}
+  .formnote{grid-column:1/-1;font-size:11.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;line-height:1.5}
+  .formnote code{background:var(--surface-3);border-radius:4px;padding:1px 5px;font-size:11px}
 
   .toast{position:fixed;bottom:calc(20px + var(--safe-b));left:50%;transform:translateX(-50%) translateY(90px);background:var(--text);color:#fff;font-size:12.5px;font-weight:600;padding:11px 16px;border-radius:9px;z-index:120;transition:transform .25s;pointer-events:none;max-width:92vw;text-align:center}
   .toast.show{transform:translateX(-50%) translateY(0)}
@@ -579,8 +587,31 @@ const toast = (msg) => { toastEl.textContent = msg; toastEl.classList.add('show'
 
 /* ================= HELPERS ================= */
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// Texto con formato mínimo: se permiten <b>, <i>, <u>, <em>, <strong> y <br>. Todo lo demás va escapado.
-const rich = (s) => esc(s).replace(/&lt;(\/?(?:b|i|u|em|strong|br))\s*\/?&gt;/gi, '<$1>');
+// Texto con formato: **negrita**, _cursiva_ y las etiquetas <b>/<i>/<u>/<br> del contenido original.
+// Todo lo demás se escapa, así que nunca se inyecta HTML arbitrario.
+const rich = (s) => esc(s)
+  .replace(/&lt;(\/?(?:b|i|u|em|strong|br))\s*\/?&gt;/gi, '<$1>')
+  .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+  .replace(/(^|[\s(\[¡¿"'>])_([^_\n]+)_(?=$|[\s.,;:!?)\]"'<])/g, '$1<i>$2</i>');
+
+// Envuelve la selección de un input/textarea con los marcadores de formato (o los quita si ya están).
+function wrapSel(node, mark) {
+  if (!node) return;
+  const v = node.value, s = node.selectionStart ?? v.length, e = node.selectionEnd ?? v.length;
+  const sel = v.slice(s, e);
+  if (s === e) {
+    node.value = v.slice(0, s) + mark + mark + v.slice(e);
+    node.selectionStart = node.selectionEnd = s + mark.length;
+  } else if (sel.length > mark.length * 2 && sel.startsWith(mark) && sel.endsWith(mark)) {
+    const inner = sel.slice(mark.length, -mark.length);
+    node.value = v.slice(0, s) + inner + v.slice(e);
+    node.selectionStart = s; node.selectionEnd = s + inner.length;
+  } else {
+    node.value = v.slice(0, s) + mark + sel + mark + v.slice(e);
+    node.selectionStart = s; node.selectionEnd = e + mark.length * 2;
+  }
+  node.focus();
+}
 const ytId = (url) => { const m = String(url || '').match(/(?:youtu\.be\/|[?&]v=|embed\/|shorts\/|live\/)([\w-]{11})/); return m ? m[1] : null; };
 const ytEmbed = (url) => { const id = ytId(url); return id ? 'https://www.youtube-nocookie.com/embed/' + id : null; };
 const ytThumb = (url) => { const id = ytId(url); return id ? 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg' : null; };
@@ -638,7 +669,27 @@ function openImage(url, title) {
 /* ================= FORMULARIOS ================= */
 function fieldControl(f, val) {
   const wrap = el('div', 'fld' + (f.half ? ' half' : ''));
-  if (f.label) wrap.appendChild(el('label', null, esc(f.label)));
+  if (f.rich) {
+    // Los botones B / I actúan sobre el último campo de texto enfocado dentro de este bloque.
+    wrap.dataset.rich = '1';
+    let lastFocus = null;
+    wrap.addEventListener('focusin', (e) => { if (e.target.matches('input[type=text],textarea')) lastFocus = e.target; });
+    const row = el('div', 'lblrow', f.label ? `<label>${esc(f.label)}</label>` : '');
+    const bar = el('div', 'fmtbar');
+    [['fb', 'B', 'Negrita (Ctrl+B)', '**'], ['fi', 'i', 'Cursiva (Ctrl+I)', '_']].forEach(([cls, txt, title, mark]) => {
+      const b = el('button', cls, txt);
+      b.type = 'button';
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // no robar el foco ni perder la selección
+      b.onclick = () => wrapSel(lastFocus || wrap.querySelector('input[type=text],textarea'), mark);
+      bar.appendChild(b);
+    });
+    row.appendChild(bar);
+    wrap.appendChild(row);
+  } else if (f.label) {
+    wrap.appendChild(el('label', null, esc(f.label)));
+  }
   let read, node;
 
   if (f.type === 'area') {
@@ -763,14 +814,30 @@ function openForm({ title, sub, fields, value, req, onSave }) {
   const build = () => {
     host.innerHTML = '';
     ctrls = [];
-    fields.filter((f) => !f.when || f.when(state)).forEach((f) => {
+    const visible = fields.filter((f) => !f.when || f.when(state));
+    visible.forEach((f) => {
       const c = fieldControl(f, state[f.k]);
       if (c.drives) c.node.addEventListener('change', () => { sync(); build(); });
       host.appendChild(c.wrap);
       ctrls.push(c);
     });
+    if (visible.some((f) => f.rich)) {
+      host.appendChild(el('div', 'formnote',
+        'En los campos con <b>B</b> / <i>i</i> puedes dar formato: selecciona el texto y pulsa el botón, o usa <b>Ctrl+B</b> y <b>Ctrl+I</b>. También puedes escribirlo a mano con <code>**negrita**</code> y <code>_cursiva_</code>.'));
+    }
   };
   build();
+
+  // Atajos de teclado en los campos que aceptan formato.
+  host.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k !== 'b' && k !== 'i') return;
+    const n = e.target;
+    if (!n.matches || !n.matches('input[type=text],textarea') || !n.closest('[data-rich]')) return;
+    e.preventDefault();
+    wrapSel(n, k === 'b' ? '**' : '_');
+  });
 
   document.getElementById('fCancel').onclick = closeModal;
   const saveBtn = document.getElementById('fSave');
@@ -796,7 +863,7 @@ function openForm({ title, sub, fields, value, req, onSave }) {
 /* ================= ESQUEMAS DE CONTENIDO ================= */
 const PRIO_OPTS = [{ v: 'crit', t: 'Crítico' }, { v: 'imp', t: 'Importante' }, { v: 'reg', t: 'Regular' }];
 const TIP_OPTS = [{ v: 'info', t: 'Info' }, { v: 'warn', t: 'Aviso' }, { v: 'alert', t: 'Alerta' }];
-const TIPS_FIELD = { k: 'tips', label: 'Tips', type: 'objlist', addLabel: 'Añadir tip', sub: [{ k: 't', type: 'select', opts: TIP_OPTS, w: '110px' }, { k: 'x', ph: 'Texto del tip' }] };
+const TIPS_FIELD = { k: 'tips', label: 'Tips', type: 'objlist', addLabel: 'Añadir tip', rich: true, sub: [{ k: 't', type: 'select', opts: TIP_OPTS, w: '110px' }, { k: 'x', ph: 'Texto del tip' }] };
 
 const SCHEMAS = {
   task: {
@@ -810,8 +877,8 @@ const SCHEMAS = {
       { k: 'tag', label: 'Etiqueta', half: true, ph: 'CONFIRMAR' },
       { k: 'block', label: 'Bloque', half: true, ph: 'Mañana' },
       { k: 'range', label: 'Rango del bloque', half: true, ph: '09:10–10:30' },
-      { k: 'desc', label: 'Descripción', type: 'area' },
-      { k: 'steps', label: 'Pasos', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir' },
+      { k: 'desc', label: 'Descripción', type: 'area', rich: true },
+      { k: 'steps', label: 'Pasos', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir', rich: true },
       TIPS_FIELD,
     ],
   },
@@ -822,7 +889,7 @@ const SCHEMAS = {
       { k: 'title', label: 'Título' },
       { k: 'type', label: 'Tipo', half: true, ph: 'Grabación de pantalla' },
       { k: 'dur', label: 'Duración', half: true, ph: '3:00' },
-      { k: 'guion', label: 'Guion sugerido', type: 'area', rows: 5 },
+      { k: 'guion', label: 'Guion sugerido', type: 'area', rows: 5, rich: true },
       { k: 'url', label: 'Link de YouTube', ph: 'https://youtu.be/…', hint: 'Opcional: puedes dejarlo vacío y pegarlo cuando grabes el video.' },
     ],
   },
@@ -831,7 +898,7 @@ const SCHEMAS = {
     def: { day: 'Día 1' },
     fields: [
       { k: 'day', label: 'Día', ph: 'Día 1', datalist: () => S.checklist.map((g) => g.day), hint: 'Escribe un día nuevo para crear otro grupo. Cambiar el día mueve sólo este ítem.' },
-      { k: 'item', label: 'Ítem', type: 'area', rows: 2 },
+      { k: 'item', label: 'Ítem', type: 'area', rows: 2, rich: true },
     ],
   },
   proceso: {
@@ -840,7 +907,7 @@ const SCHEMAS = {
     fields: [
       { k: 'name', label: 'Nombre del proceso' },
       { k: 'when', label: 'Cuándo se usa', ph: 'En cada confirmación' },
-      { k: 'steps', label: 'Paso a paso', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir' },
+      { k: 'steps', label: 'Paso a paso', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir', rich: true },
       TIPS_FIELD,
       { k: 'url', label: 'Video de YouTube', ph: 'https://youtu.be/…' },
     ],
@@ -852,12 +919,12 @@ const SCHEMAS = {
       { k: 'name', label: 'Nombre' },
       { k: 'brand', label: 'Marca', half: true, ph: 'NOVAFLEX®' },
       { k: 'price', label: 'Rango de precio', half: true, ph: 'S/69 – S/129' },
-      { k: 'desc', label: 'Descripción', type: 'area' },
+      { k: 'desc', label: 'Descripción', type: 'area', rich: true },
       { k: 'packs', label: 'Packs y precios', type: 'objlist', addLabel: 'Añadir pack', sub: [{ k: 'q', ph: '2 unidades', w: '140px' }, { k: 'p', ph: 'S/99' }, { k: 'best', type: 'check', label: 'Más vendido' }] },
-      { k: 'beneficios', label: 'Beneficios', type: 'list', addLabel: 'Añadir beneficio', ph: 'Beneficio' },
-      { k: 'specs', label: 'Especificaciones', type: 'objlist', addLabel: 'Añadir especificación', sub: [{ k: 'k', ph: 'Material', w: '150px' }, { k: 'v', ph: 'Tejido elástico' }] },
-      { k: 'objeciones', label: 'Objeciones y respuesta', type: 'objlist', addLabel: 'Añadir objeción', sub: [{ k: 'o', ph: 'Objeción del cliente', w: '190px' }, { k: 'r', type: 'area', ph: 'Cómo responder' }] },
-      { k: 'argumentos', label: 'Cómo presentarlo', type: 'area' },
+      { k: 'beneficios', label: 'Beneficios', type: 'list', addLabel: 'Añadir beneficio', ph: 'Beneficio', rich: true },
+      { k: 'specs', label: 'Especificaciones', type: 'objlist', addLabel: 'Añadir especificación', rich: true, sub: [{ k: 'k', ph: 'Material', w: '150px' }, { k: 'v', ph: 'Tejido elástico' }] },
+      { k: 'objeciones', label: 'Objeciones y respuesta', type: 'objlist', addLabel: 'Añadir objeción', rich: true, sub: [{ k: 'o', ph: 'Objeción del cliente', w: '190px' }, { k: 'r', type: 'area', ph: 'Cómo responder' }] },
+      { k: 'argumentos', label: 'Cómo presentarlo', type: 'area', rich: true },
     ],
   },
   ejemplo: {
@@ -868,10 +935,10 @@ const SCHEMAS = {
       { k: 'dur', label: 'Duración', half: true, ph: '6 mensajes / 2:14' },
       { k: 'title', label: 'Título' },
       { k: 'obj', label: 'Etiqueta', ph: 'Objeción: precio' },
-      { k: 'desc', label: 'Descripción corta', type: 'area', rows: 2 },
-      { k: 'chat', label: 'Mensajes', type: 'objlist', addLabel: 'Añadir mensaje', when: (v) => v.kind === 'chat', sub: [{ k: 's', type: 'select', opts: [{ v: 'in', t: 'Cliente' }, { v: 'out', t: 'Vendedora' }], w: '120px' }, { k: 'w', ph: 'Quién', w: '110px' }, { k: 't', type: 'area', ph: 'Mensaje' }] },
-      { k: 'note', label: 'Qué observar en la llamada', type: 'area', when: (v) => v.kind === 'call' },
-      { k: 'learn', label: 'Qué aprender', type: 'area', hint: 'Puedes usar <b>negritas</b>.' },
+      { k: 'desc', label: 'Descripción corta', type: 'area', rows: 2, rich: true },
+      { k: 'chat', label: 'Mensajes', type: 'objlist', addLabel: 'Añadir mensaje', rich: true, when: (v) => v.kind === 'chat', sub: [{ k: 's', type: 'select', opts: [{ v: 'in', t: 'Cliente' }, { v: 'out', t: 'Vendedora' }], w: '120px' }, { k: 'w', ph: 'Quién', w: '110px' }, { k: 't', type: 'area', ph: 'Mensaje' }] },
+      { k: 'note', label: 'Qué observar en la llamada', type: 'area', when: (v) => v.kind === 'call', rich: true },
+      { k: 'learn', label: 'Qué aprender', type: 'area', rich: true },
     ],
   },
 };
@@ -956,13 +1023,13 @@ function renderRunbook() {
   T.forEach((t, i) => {
     if (t.block !== lastBlock) { lastBlock = t.block; tl.insertAdjacentHTML('beforeend', `<div class="block-label"><b>${esc(t.block)}</b><span class="rng">${esc(t.range)}</span><span class="ln"></span></div>`); }
     const tipsHTML = (t.tips || []).map((tp) => `<div class="tip ${esc(tp.t)}">${rich(tp.x)}</div>`).join('');
-    const stepsHTML = (t.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${esc(s)}</div>`).join('');
+    const stepsHTML = (t.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${rich(s)}</div>`).join('');
     const item = el('div', 'task' + (t.done ? ' done' : ''));
     item.innerHTML = `
       <div class="tl"><span class="tt">${esc(t.time)}</span><span class="tn"></span><span class="tline"></span></div>
       <div class="card ${i === 0 ? 'open' : ''}">
         <div class="chead"><span class="cdot ${esc(t.prio)}"></span><span class="tag" style="${t.prio === 'crit' ? 'background:var(--crit-soft);color:var(--crit)' : t.prio === 'reg' ? 'background:var(--ok-soft);color:var(--ok)' : ''}">${esc(t.tag)}</span><span class="ct">${esc(t.title)}<span class="cdur">${esc(t.dur)}</span></span><span class="nowpill" style="display:none">Ahora</span><span class="chev">${svgChev}</span></div>
-        <div class="cbody"><div class="inner"><p class="cdesc">${esc(t.desc)}</p>${stepsHTML ? `<div class="subh">Cómo hacerlo — paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${tipsHTML ? `<div class="subh">Tips importantes</div><div class="tips">${tipsHTML}</div>` : ''}<div class="cactions"><button class="btn-done">${svgCheck.replace('currentColor', '#fff')} ${t.done ? 'Completada' : 'Marcar como completada'}</button></div></div></div>
+        <div class="cbody"><div class="inner"><p class="cdesc">${rich(t.desc)}</p>${stepsHTML ? `<div class="subh">Cómo hacerlo — paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${tipsHTML ? `<div class="subh">Tips importantes</div><div class="tips">${tipsHTML}</div>` : ''}<div class="cactions"><button class="btn-done">${svgCheck.replace('currentColor', '#fff')} ${t.done ? 'Completada' : 'Marcar como completada'}</button></div></div></div>
       </div>`;
     item.querySelector('.chead').onclick = () => item.querySelector('.card').classList.toggle('open');
     item.querySelector('.btn-done').onclick = async (e) => {
@@ -1018,7 +1085,7 @@ function renderProcesos() {
   list.innerHTML = '';
   if (!S.procesos.length) list.innerHTML = emptyBox('Aún no hay procesos cargados.');
   S.procesos.forEach((p) => {
-    const stepsHTML = (p.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${esc(s)}</div>`).join('');
+    const stepsHTML = (p.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${rich(s)}</div>`).join('');
     const tipsHTML = (p.tips || []).map((tp) => `<div class="tip ${esc(tp.t)}">${rich(tp.x)}</div>`).join('');
     const emb = ytEmbed(p.url);
     const node = el('div', 'proc');
@@ -1061,7 +1128,7 @@ function renderVideos() {
       <div class="vc-info"><div class="vnum">Video ${v.n}</div><h4>${esc(v.title)}</h4><div class="vtype">${esc(v.type)}</div></div>
       <div class="vc-side"><span class="vc-status ${ready ? 'ready' : 'pending'}">${ready ? 'Listo' : 'Por grabar'}</span></div></div>
       <div class="vc-guion"><div class="gtoggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Guion sugerido — qué narrar<span class="chev">${svgChev}</span></div>
-      <div class="gbody"><div class="gin"><div class="glabel">Guion</div><p>${esc(v.guion)}</p>
+      <div class="gbody"><div class="gin"><div class="glabel">Guion</div><p>${rich(v.guion)}</p>
         <div class="linkrow"><input placeholder="Pega el link de YouTube…" value="${esc(v.url)}"><button>${svgPlus}${ready ? 'Actualizar link' : 'Guardar video'}</button></div>
       </div></div></div>`;
     node.querySelector('.gtoggle').onclick = () => node.classList.toggle('gopen');
@@ -1101,7 +1168,7 @@ function renderChecklist() {
     grp.appendChild(head);
     g.items.forEach((it) => {
       const node = el('div', 'check' + (it.done ? ' done' : ''),
-        `<span class="box">${svgCheck.replace('currentColor', '#fff')}</span><span class="ct">${esc(it.text)}</span>`);
+        `<span class="box">${svgCheck.replace('currentColor', '#fff')}</span><span class="ct">${rich(it.text)}</span>`);
       node.onclick = async () => {
         const next = !it.done;
         try { await api('PUT', `/checklist/${it.id}/done`, { done: next }); it.done = next; node.classList.toggle('done', next); }
@@ -1126,7 +1193,7 @@ function renderEjemplos() {
     const icon = e.kind === 'chat'
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>';
-    node.innerHTML = `<div class="ej-cover ${esc(e.kind)}"><span class="kind">${e.kind === 'chat' ? 'Chat' : 'Llamada'}</span><div class="big">${icon}</div><span class="dur">${esc(e.dur)}</span></div><div class="ej-b"><h4>${esc(e.title)}</h4><p>${esc(e.desc)}</p>${e.obj ? `<span class="obj-tag">${esc(e.obj)}</span>` : ''}</div>`;
+    node.innerHTML = `<div class="ej-cover ${esc(e.kind)}"><span class="kind">${e.kind === 'chat' ? 'Chat' : 'Llamada'}</span><div class="big">${icon}</div><span class="dur">${esc(e.dur)}</span></div><div class="ej-b"><h4>${esc(e.title)}</h4><p>${rich(e.desc)}</p>${e.obj ? `<span class="obj-tag">${esc(e.obj)}</span>` : ''}</div>`;
     node.onclick = () => openEjemplo(e);
     node.appendChild(ebar('ejemplo', e, { floating: true, name: `el ejemplo “${e.title}”` }));
     g.appendChild(node);
@@ -1140,9 +1207,9 @@ function openEjemplo(e) {
     : '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>';
   const body = e.kind === 'chat'
     ? (e.chat && e.chat.length
-      ? `<div class="chatlog">${e.chat.map((b) => `<div class="bub ${esc(b.s)}"><div class="who">${esc(b.w)}</div>${esc(b.t)}</div>`).join('')}</div>`
+      ? `<div class="chatlog">${e.chat.map((b) => `<div class="bub ${esc(b.s)}"><div class="who">${esc(b.w)}</div>${rich(b.t)}</div>`).join('')}</div>`
       : emptyBox('Este ejemplo todavía no tiene mensajes.'))
-    : `<div class="callplayer"><div class="disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></div><div class="wave">${Array.from({ length: 18 }).map((_, k) => `<i style="animation-delay:${k * 0.08}s"></i>`).join('')}</div><div class="pbar"><i></i></div><div class="ptime">${esc(e.dur)}</div>${e.note ? `<div class="note"><b style="color:${color}">Qué observar:</b> ${esc(e.note)}</div>` : ''}</div>`;
+    : `<div class="callplayer"><div class="disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></div><div class="wave">${Array.from({ length: 18 }).map((_, k) => `<i style="animation-delay:${k * 0.08}s"></i>`).join('')}</div><div class="pbar"><i></i></div><div class="ptime">${esc(e.dur)}</div>${e.note ? `<div class="note"><b style="color:${color}">Qué observar:</b> ${rich(e.note)}</div>` : ''}</div>`;
   openModal(modalHead(e.title, `${e.kind === 'chat' ? 'Conversación de WhatsApp' : 'Llamada de voz'} · ${e.dur}`, color, icon) + `<div class="modal-body">${body}${e.learn ? `<div class="learn"><b>Qué aprender:</b> ${rich(e.learn)}</div>` : ''}</div>`);
 }
 
@@ -1184,10 +1251,10 @@ function openFicha(id, fresh) {
   document.getElementById('fichasGrid').style.display = 'none';
   const d = document.getElementById('fichaDetail');
   d.style.display = 'block';
-  const benef = (p.beneficios || []).map((b) => `<div class="benefit"><span class="bk">${svgCheck}</span>${esc(b)}</div>`).join('');
-  const specs = (p.specs || []).map((s) => `<div class="spec"><span class="sk">${esc(s.k)}</span><span class="sv">${esc(s.v)}</span></div>`).join('');
+  const benef = (p.beneficios || []).map((b) => `<div class="benefit"><span class="bk">${svgCheck}</span>${rich(b)}</div>`).join('');
+  const specs = (p.specs || []).map((s) => `<div class="spec"><span class="sk">${esc(s.k)}</span><span class="sv">${rich(s.v)}</span></div>`).join('');
   const packs = (p.packs || []).map((pk) => `<div class="pack ${pk.best ? 'best' : ''}">${pk.best ? '<span class="pbadge">Más vendido</span>' : ''}<div class="pq">${esc(pk.q)}</div><div class="pp">${esc(pk.p)}</div></div>`).join('');
-  const objs = (p.objeciones || []).map((o) => `<div class="obj"><div class="obj-q"><span class="qm">?</span><span class="qt">${esc(o.o)}</span><span class="chev">${svgChev}</span></div><div class="obj-a"><div class="ain">${esc(o.r)}</div></div></div>`).join('');
+  const objs = (p.objeciones || []).map((o) => `<div class="obj"><div class="obj-q"><span class="qm">?</span><span class="qt">${rich(o.o)}</span><span class="chev">${svgChev}</span></div><div class="obj-a"><div class="ain">${rich(o.r)}</div></div></div>`).join('');
   d.innerHTML = `
     <div class="ficha-top"><div class="back" id="fichaBack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg> Volver a productos</div><div id="fichaEbar" style="margin-left:auto"></div></div>
     <div class="ficha-head"><div>${p.brand ? `<span class="btag">${esc(p.brand)}</span>` : ''}<h2>${esc(p.name)}</h2><div class="price">${esc(p.price)}</div></div></div>
@@ -1199,11 +1266,11 @@ function openFicha(id, fresh) {
       <div class="linkrow" id="mediaAdd"><input id="mediaTitle" placeholder="Título (opcional)" style="max-width:200px"><input id="mediaUrl" placeholder="Pega el link…"><button id="mediaBtn">${svgPlus}Agregar</button></div>
     </div>
 
-    ${p.desc || packs ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8v.5"/></svg> Información</h3><p class="fdesc">${esc(p.desc)}</p><div class="packs">${packs}</div></div>` : ''}
+    ${p.desc || packs ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8v.5"/></svg> Información</h3><p class="fdesc">${rich(p.desc)}</p><div class="packs">${packs}</div></div>` : ''}
     ${benef ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Beneficios</h3>${benef}</div>` : ''}
     ${specs ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg> Especificaciones</h3>${specs}</div>` : ''}
     ${objs ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Objeciones frecuentes y cómo responder</h3>${objs}</div>` : ''}
-    ${p.argumentos ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 .4-4 3.3 1.3 5L12 19l-4.3 2.7L9 14.7 5 11.4 10 11z"/></svg> Cómo presentarlo</h3><div class="argu">${esc(p.argumentos)}</div></div>` : ''}`;
+    ${p.argumentos ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 .4-4 3.3 1.3 5L12 19l-4.3 2.7L9 14.7 5 11.4 10 11z"/></svg> Cómo presentarlo</h3><div class="argu">${rich(p.argumentos)}</div></div>` : ''}`;
 
   document.getElementById('fichaBack').onclick = () => { showFichasGrid(); renderProdGrid(); };
   document.getElementById('fichaEbar').appendChild(ebar('producto', p, { name: `el producto “${p.name}”` }));

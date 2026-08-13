@@ -22,8 +22,13 @@ Detalles de comportamiento:
 - El **runbook se ordena solo por hora**: al crear o editar una tarea se recoloca en la línea de tiempo, por eso no tiene flechas de subir/bajar.
 - En el **checklist**, escribir un día que no existe crea ese grupo; el ítem nuevo entra al final de su día.
 - Al **eliminar un producto** se borran también sus imágenes y videos.
-- Los campos de tips y "qué aprender" aceptan formato mínimo (`<b>`, `<i>`, `<br>`); el resto del HTML se escapa.
 - Las marcas de progreso (tarea completada, ítem del checklist) no dependen del modo edición: están siempre disponibles.
+
+### Negrita y cursiva
+
+Los campos de contenido —descripciones, pasos, tips, guiones, ítems del checklist, beneficios, specs, objeciones, argumentos, mensajes de chat y "qué aprender"— llevan botones **B** / *i* junto a su etiqueta. Selecciona el texto y pulsa el botón, o usa **Ctrl+B** / **Ctrl+I**. Pulsar de nuevo sobre el texto ya formateado quita el formato.
+
+Por debajo se guarda como texto plano con marcadores, `**negrita**` y `_cursiva_`, así que también puedes escribirlos a mano. Al pintar, sólo se convierten esos marcadores y las etiquetas `<b>`, `<i>`, `<u>` y `<br>` que ya traía el contenido original: cualquier otro HTML se escapa y se muestra como texto, de modo que pegar algo en un campo no puede inyectar código en la página.
 
 ## Responsive
 
