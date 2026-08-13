@@ -11,6 +11,7 @@ const PUBLIC = join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const TZ = process.env.TZ_APP || 'America/Lima';
+const VERSION = '2026-08-13-1';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -146,7 +147,7 @@ async function api(req, res, path) {
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   try {
-    if (path === '/health') return json(res, 200, { ok: true });
+    if (path === '/health') return json(res, 200, { ok: true, version: VERSION });
     if (path.startsWith('/api/')) return await api(req, res, path);
     if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: 'Método no permitido' });
 
