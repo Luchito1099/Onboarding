@@ -18,7 +18,7 @@ const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
-const VERSION = '2026-08-14-4';
+const VERSION = '2026-08-14-5';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -316,12 +316,16 @@ const normEjemplo = (b) => {
   return e;
 };
 
-// Guion de un caso: apertura + preguntas del cliente con su respuesta + cierre.
+// Guion: apertura + casos (qué decir en cada situación) + preguntas del cliente + cierre.
 const normGuion = (b) => ({
   title: req(b.title, 160, 'el título del caso'),
   tag: str(b.tag, 40),
   when: str(b.when, 160),
   apertura: text(b.apertura, 2500),
+  casos: objList(b.casos, 30, (c) => {
+    const n = str(c?.n, 200), t = text(c?.t, 3000);
+    return n || t ? { n, t } : null;
+  }),
   qas: objList(b.qas, 30, (x) => {
     const q = text(x?.q, 300), r = text(x?.r, 2000), nota = text(x?.nota, 400);
     return q || r ? { q, r, nota } : null;

@@ -94,7 +94,13 @@ export const PRODUCTS = [
 // Guiones por caso: apertura + lo que puede preguntar el cliente y qué responder.
 export const GUIONES = [
   {title:'Cliente no respondió al mensaje del adelanto',tag:'Provincia',when:'Pedido de provincia · ya se le envió la info del adelanto y no contesta',
-   apertura:'Hola [nombre], ¿qué tal? Te saluda [asesor] de Nova Shop.\n\nTe estoy llamando por el pedido que registraste con nosotros de [producto]. Hace un momento te enviamos la información para realizar el adelanto de S/30 y poder despachar tu pedido.\n\nQuería confirmar si **llegaste a realizar el adelanto**, para poder **alistarlo y enviarlo el día de hoy**.',
+   apertura:'Hola [nombre], ¿qué tal? Te saluda [asesor] de Nova Shop.\n\nTe estoy llamando por el pedido que registraste con nosotros de [producto].',
+   casos:[
+     {n:'Ya le enviamos la información del adelanto y no contesta',
+      t:'Hace un momento te enviamos la información para realizar el adelanto de S/30 y poder despachar tu pedido.\n\nQuería confirmar si **llegaste a realizar el adelanto**, para poder **alistarlo y enviarlo el día de hoy**.'},
+     {n:'Es la primera vez que se le explica el adelanto',
+      t:'Para los envíos a provincia pedimos un adelanto de S/30 que **se descuenta del total**; el resto lo pagas cuando el pedido llega a la agencia.\n\nTe paso los medios de pago por WhatsApp y, apenas me envíes el comprobante, lo dejo listo para despacho.'}
+   ],
    qas:[
      {q:'Todavía no lo he hecho',
       r:'No hay problema. Si deseas que tu pedido salga en el despacho de hoy, puedes realizar el adelanto de S/30 en cualquiera de los medios que te enviamos por WhatsApp. Una vez que me envíes el comprobante, procedemos con el despacho.',

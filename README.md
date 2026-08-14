@@ -34,15 +34,18 @@ Por debajo se guarda como texto plano con marcadores, `**negrita**` y `_cursiva_
 
 ## Guiones por caso
 
-Cada guion es un **caso** ("Cliente no respondió al mensaje del adelanto") y contiene:
+Cada guion cubre una situación ("Llamada — Confirmación pedidos Lima COD") y contiene:
 
-- **Cómo abrir** — lo que se dice primero, tal cual.
-- **Qué puede preguntar y qué responder** — una tarjeta por objeción o pregunta, con la respuesta literal y una nota interna (*Para ti*) que no se copia.
+- **Cómo abrir** — lo que se dice primero. Opcional: si cada caso ya trae su saludo, se deja vacío.
+- **Casos** — una entrada por situación ("Ubicación no encontrada en el mapa", "Pedido del mismo día antes de las 10:30"), cada una con su texto completo.
+- **Qué puede preguntar y qué responder** — una entrada por pregunta u objeción, con la respuesta literal y una nota interna (*Para ti*).
 - **Cómo cerrar** y **recordatorios**.
 
-Los guiones se escriben **sólo en esta pestaña**. Desde una tarea del runbook o desde un proceso se elige cuál aplica (campo *Guion de ventas*), y aparece un botón que lleva al caso ya abierto — así el guion vive en un único sitio y se referencia desde donde haga falta.
+Los casos y las preguntas son **desplegables**: se abre sólo el que hace falta, uno a uno, sin perder de vista el resto. Pensado para usarlo en mitad de una llamada.
 
-Cada respuesta tiene su botón **Copiar**, y hay uno para el guion completo. Al copiar se convierte al formato de WhatsApp: `**negrita**` sale como `*negrita*`. El buscador de arriba filtra por caso, pregunta o cualquier palabra del texto y abre directamente el caso encontrado — pensado para usarlo en mitad de una llamada.
+Los guiones se escriben **sólo en esta pestaña**. Desde una tarea del runbook o desde un proceso se elige cuál aplica (campo *Guion de ventas*), y aparece un botón que lleva al guion ya abierto — así vive en un único sitio y se referencia desde donde haga falta.
+
+El buscador de arriba filtra por título, caso, pregunta o cualquier palabra del texto, y abre directamente lo que encuentra.
 
 ## Estructura de una tarea del runbook
 

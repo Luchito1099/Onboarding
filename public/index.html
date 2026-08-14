@@ -484,16 +484,20 @@
   .sblock .sh svg{width:14px;height:14px;flex-shrink:0}
   .say{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:13px 15px;font-size:13.5px;line-height:1.6;white-space:pre-wrap}
   .qa{border:1px solid var(--line);border-radius:11px;margin-bottom:9px;overflow:hidden}
-  .qa .qh{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--surface-2);font-weight:700;font-size:13.5px;line-height:1.4}
+  .qa .qh{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--surface-2);font-weight:700;font-size:13.5px;line-height:1.4;cursor:pointer;user-select:none}
+  .qa .qh:hover{background:var(--surface-3)}
   .qa .qh .qi{width:24px;height:24px;border-radius:7px;background:var(--imp-soft);color:var(--imp);display:grid;place-items:center;font-weight:800;flex-shrink:0;font-size:13px}
-  .qa .qb{padding:13px 14px}
+  .qa .qh .qt2{flex:1;min-width:0}
+  .qa .qh .chev{color:var(--muted-2);transition:transform .2s;flex-shrink:0;margin-top:1px}
+  .qa .qh .chev svg{width:17px;height:17px}
+  .qa.open .qh .chev{transform:rotate(180deg)}
+  .qa .qb{max-height:0;overflow:hidden;transition:max-height .28s ease}
+  .qa.open .qb{max-height:2000px}
+  .qa .qbin{padding:13px 14px}
+  .qa.caso .qi{background:var(--accent-soft);color:var(--accent-ink)}
   .qa .qr{font-size:13.5px;line-height:1.6;white-space:pre-wrap;border-left:3px solid var(--accent-soft);padding-left:12px}
   .qa .snota{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5}
   .qa .snota b{color:var(--accent-ink);font-weight:800}
-  .copy{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent-ink);border:none;border-radius:8px;padding:8px 12px;font-weight:700;font-size:11.5px;cursor:pointer;margin-top:10px;min-height:34px}
-  .copy svg{width:13px;height:13px}
-  .copy:hover{background:#d3ede9}
-  .copy.all{width:100%;justify-content:center;margin-top:16px;min-height:42px;font-size:13px}
   .gcount{font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:20px;background:var(--info-soft);color:var(--info);white-space:nowrap}
 
   /* QUÉ HACER SEGÚN EL RESULTADO (tareas) */
@@ -738,7 +742,7 @@
 
         <!-- ===== GUIONES POR CASO ===== -->
         <section class="view" id="view-guiones">
-          <div class="panel-head"><h2>Guiones por caso</h2><p>Qué decir en cada situación: la apertura, lo que puede preguntar el cliente y la respuesta exacta. Busca el caso, abre y copia la respuesta directo a WhatsApp.</p></div>
+          <div class="panel-head"><h2>Guiones por caso</h2><p>Qué decir en cada situación. Cada guion se abre por casos y por preguntas del cliente: despliega sólo el que necesitas mientras hablas.</p></div>
           <div class="searchbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="guionSearch" placeholder="Buscar por caso, pregunta o palabra suelta…" autocomplete="off"><button class="sclear" id="guionClear" type="button" style="display:none">✕</button></div>
           <div class="filters" id="guionTags"></div>
           <div class="draghint">Arrastra las tarjetas por el asa para cambiar el orden.</div>
@@ -1445,8 +1449,9 @@ const SCHEMAS = {
       { k: 'title', label: 'Caso', ph: 'Ej. Cliente no respondió al mensaje del adelanto' },
       { k: 'tag', label: 'Etiqueta', half: true, ph: 'Provincia / Objeción: precio' },
       { k: 'when', label: 'Cuándo se usa', half: true, ph: 'Pedido de provincia · no contesta' },
-      { k: 'apertura', label: 'Cómo abrir (lo que dices primero)', type: 'area', rows: 6, rich: true },
-      { k: 'qas', label: 'Qué puede preguntar y qué responder', type: 'objlist', addLabel: 'Añadir pregunta', rich: true, hint: 'Una fila por pregunta u objeción del cliente. “Para ti” es la nota interna del asesor, no se copia.', sub: [{ k: 'q', type: 'area', ph: 'Lo que dice el cliente', w: '210px' }, { k: 'r', type: 'area', ph: 'Respuesta literal' }, { k: 'nota', ph: 'Para ti (opcional)', w: '170px' }] },
+      { k: 'apertura', label: 'Cómo abrir (lo que dices primero)', type: 'area', rows: 5, rich: true, hint: 'Opcional. Si cada caso ya trae su propio saludo, puedes dejarlo vacío.' },
+      { k: 'casos', label: 'Casos', type: 'objlist', addLabel: 'Añadir caso', rich: true, hint: 'Una fila por situación: “Ubicación no encontrada en el mapa”, “Pedido del mismo día antes de las 10:30”… Cada caso se despliega por separado.', sub: [{ k: 'n', type: 'area', ph: 'Nombre del caso', w: '230px' }, { k: 't', type: 'area', ph: 'Qué decir en este caso' }] },
+      { k: 'qas', label: 'Qué puede preguntar y qué responder', type: 'objlist', addLabel: 'Añadir pregunta', rich: true, hint: 'Una fila por pregunta u objeción del cliente. “Para ti” es la nota interna del asesor.', sub: [{ k: 'q', type: 'area', ph: 'Lo que dice el cliente', w: '210px' }, { k: 'r', type: 'area', ph: 'Respuesta literal' }, { k: 'nota', ph: 'Para ti (opcional)', w: '170px' }] },
       { k: 'cierre', label: 'Cómo cerrar', type: 'area', rows: 3, rich: true },
       TIPS_FIELD,
     ],
@@ -2192,6 +2197,7 @@ async function copyText(t) {
 
 let guionQuery = '', guionTag = 'all';
 const guionText = (g) => [g.title, g.tag, g.when, g.apertura, g.cierre,
+  ...(g.casos || []).flatMap((c) => [c.n, c.t]),
   ...(g.qas || []).flatMap((x) => [x.q, x.r, x.nota]),
   ...(g.tips || []).map((t) => t.x)].join(' ').toLowerCase();
 
@@ -2211,16 +2217,18 @@ function renderGuiones() {
   if (!arr.length) { list.innerHTML = emptyBox(`Ningún caso coincide con “${guionQuery}”.`); return; }
 
   arr.forEach((g) => {
-    const textos = [];
-    const cbtn = (t, extra) => {
-      textos.push(t);
-      return `<button class="copy ${extra || ''}" type="button" data-i="${textos.length - 1}">${ICON.copy}Copiar</button>`;
-    };
+    // Cada caso y cada pregunta se abre y se cierra por separado.
+    const casos = (g.casos || []).map((c, i) => `<div class="qa caso">
+      <div class="qh"><span class="qi">${i + 1}</span><span class="qt2">${rich(c.n)}</span><span class="chev">${svgChev}</span></div>
+      <div class="qb"><div class="qbin"><div class="qr">${rich(c.t)}</div></div></div></div>`).join('');
     const qas = (g.qas || []).map((x) => `<div class="qa">
-      <div class="qh"><span class="qi">?</span><div>${rich(x.q)}</div></div>
-      <div class="qb"><div class="qr">${rich(x.r)}</div>${x.nota ? `<div class="snota"><b>Para ti:</b> ${rich(x.nota)}</div>` : ''}${x.r ? cbtn(x.r) : ''}</div></div>`).join('');
+      <div class="qh"><span class="qi">?</span><span class="qt2">${rich(x.q)}</span><span class="chev">${svgChev}</span></div>
+      <div class="qb"><div class="qbin"><div class="qr">${rich(x.r)}</div>${x.nota ? `<div class="snota"><b>Para ti:</b> ${rich(x.nota)}</div>` : ''}</div></div></div>`).join('');
     const tipsHTML = (g.tips || []).map((tp) => `<div class="tip ${esc(tp.t)}">${rich(tp.x)}</div>`).join('');
-    const completo = [g.apertura, ...(g.qas || []).map((x) => `${x.q}\n${x.r}`), g.cierre].filter(Boolean).join('\n\n');
+    const cuenta = [
+      (g.casos || []).length ? `${(g.casos || []).length} casos` : '',
+      (g.qas || []).length ? `${(g.qas || []).length} respuestas` : '',
+    ].filter(Boolean).join(' · ');
 
     const node = el('div', 'proc');
     node.dataset.sid = g.id;
@@ -2228,17 +2236,20 @@ function renderGuiones() {
     node.innerHTML = `<div class="proc-head"><div class="pi">${ICON.script}</div>
       <div class="pt"><b>${esc(g.title)}</b><span>${esc(g.when)}</span></div>
       ${g.tag ? `<span class="vflag has">${esc(g.tag)}</span>` : ''}
-      <span class="gcount">${(g.qas || []).length} respuestas</span><span class="chev">${svgChev}</span></div>
+      ${cuenta ? `<span class="gcount">${esc(cuenta)}</span>` : ''}<span class="chev">${svgChev}</span></div>
       <div class="proc-body"><div class="pin">
-        ${g.apertura ? `<div class="sblock"><div class="sh">${ICON.chatDark} Cómo abrir</div><div class="say">${rich(g.apertura)}</div>${cbtn(g.apertura)}</div>` : ''}
+        ${g.apertura ? `<div class="sblock"><div class="sh">${ICON.chatDark} Cómo abrir</div><div class="say">${rich(g.apertura)}</div></div>` : ''}
+        ${casos ? `<div class="sblock"><div class="sh">${ICON.branch} Casos</div>${casos}</div>` : ''}
         ${qas ? `<div class="sblock"><div class="sh">${ICON.question} Qué puede preguntar y qué responder</div>${qas}</div>` : ''}
-        ${g.cierre ? `<div class="sblock"><div class="sh">${ICON.check2} Cómo cerrar</div><div class="say">${rich(g.cierre)}</div>${cbtn(g.cierre)}</div>` : ''}
+        ${g.cierre ? `<div class="sblock"><div class="sh">${ICON.check2} Cómo cerrar</div><div class="say">${rich(g.cierre)}</div></div>` : ''}
         ${tipsHTML ? `<div class="sblock"><div class="sh">${ICON.bulb} Recordatorios</div><div class="tips">${tipsHTML}</div></div>` : ''}
-        ${completo ? cbtn(completo, 'all').replace('>Copiar', '>Copiar el guion completo') : ''}
       </div></div>`;
     node.querySelector('.proc-head').onclick = () => node.classList.toggle('open');
     node.querySelector('.proc-head').insertBefore(ebar('guion', g, { sort: true, name: `el guion “${g.title}”` }), node.querySelector('.proc-head .chev'));
-    node.querySelectorAll('.copy').forEach((b) => (b.onclick = (ev) => { ev.stopPropagation(); copyText(textos[+b.dataset.i]); }));
+    node.querySelectorAll('.qa .qh').forEach((h) => (h.onclick = (ev) => {
+      ev.stopPropagation();
+      h.parentElement.classList.toggle('open');
+    }));
     list.appendChild(node);
   });
   sortable(list, (ids) => saveOrder('/guiones', ids));
