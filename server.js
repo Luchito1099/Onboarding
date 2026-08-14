@@ -1,13 +1,12 @@
 import { createServer } from 'node:http';
-import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, extname, normalize, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
-import { DatabaseSync } from 'node:sqlite';
 import { rutaEnMontaje } from './lib/volumen.js';
-import { TASKS, VIDEOS, CHECKLIST, PROCESOS, PRODUCTS, EJEMPLOS, INFOS, GUIONES } from './seed.js';
+import { abrirDB } from './lib/db.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(ROOT, 'public');
@@ -19,18 +18,43 @@ const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
-const ALLOW_EPHEMERAL = /^(1|true|si|sí|yes)$/i.test(process.env.ALLOW_EPHEMERAL || '');
-const VERSION = '2026-08-14-9';
+const VERSION = '2026-08-14-10';
 
-/* ================= DB ================= */
+/* ================= TIPOS DE ARCHIVO ================= */
+const EXT = {
+  'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif',
+  'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a',
+  'audio/aac': '.aac', 'audio/ogg': '.ogg', 'audio/wav': '.wav', 'audio/x-wav': '.wav', 'audio/webm': '.weba',
+  'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
+};
+const MIME_BY_EXT = Object.fromEntries(Object.entries(EXT).map(([m, e]) => [e, m]));
+const mimePorExt = (name) => MIME_BY_EXT[extname(String(name)).toLowerCase()] || null;
+
+/* ================= MOTOR DE DATOS ================= */
+// PostgreSQL si hay variables de conexión (DB_* / DATABASE_URL / PG*); si no, SQLite local.
+const E = process.env;
+const PG_URL = E.DATABASE_URL || E.POSTGRES_URL || '';
+const PG_HOST = E.PGHOST || E.POSTGRES_HOST || E.DB_HOST || '';
+const MOTOR = (PG_URL || PG_HOST) ? 'postgres' : 'sqlite';
+const PG_CFG = PG_URL
+  ? { connectionString: PG_URL, connectionTimeoutMillis: 8000 }
+  : {
+    host: PG_HOST,
+    port: Number(E.PGPORT || E.POSTGRES_PORT || E.DB_PORT || 5432),
+    user: E.PGUSER || E.POSTGRES_USER || E.DB_USER || 'postgres',
+    password: E.PGPASSWORD || E.POSTGRES_PASSWORD || E.DB_PASSWORD || '',
+    database: E.PGDATABASE || E.POSTGRES_DB || E.DB_NAME || 'postgres',
+    connectionTimeoutMillis: 8000,
+    ssl: /^(1|true)$/i.test(E.PGSSL || E.DB_SSL || '') ? { rejectUnauthorized: false } : undefined,
+  };
+
 mkdirSync(DATA_DIR, { recursive: true });
 mkdirSync(UPLOADS, { recursive: true });
 mkdirSync(BACKUPS, { recursive: true });
 const DB_FILE = join(DATA_DIR, 'nova.db');
-const BASE_NUEVA = !existsSync(DB_FILE); // si es nueva, o es la primera vez o el volumen no persistió
+const BASE_NUEVA = MOTOR === 'sqlite' && !existsSync(DB_FILE);
 
-// ¿DATA_DIR está en un volumen montado, o en el disco temporal del contenedor?
-// Un contenedor sin volumen pierde TODO en cada despliegue, así que se detecta y se avisa.
+// ¿DATA_DIR está en un volumen montado o en el disco temporal del contenedor?
 function enVolumenMontado(dir) {
   try {
     if (!existsSync('/proc/self/mountinfo')) return null; // fuera de Linux no se puede saber
@@ -40,94 +64,161 @@ function enVolumenMontado(dir) {
 const EN_CONTENEDOR = existsSync('/.dockerenv');
 const EFIMERO = EN_CONTENEDOR && enVolumenMontado(DATA_DIR) === false;
 
-// Sin volumen la app arranca igual (se está preparando la migración a Postgres),
-// pero avisa fuerte: en el log, en /health y con el cartel rojo dentro de la app.
-if (EFIMERO) {
-  console.warn(`[AVISO] ${DATA_DIR} NO es un volumen persistente: lo que se guarde ahí se pierde en cada despliegue.`);
-  console.warn(`[AVISO] Solución: Coolify → Storage → Persistent Storage con Destination Path ${DATA_DIR} — o migrar a PostgreSQL.`);
-}
-
-// Seguro de producción: con REQUIRE_DATA=1 la app se niega a arrancar si no encuentra la base,
-// en vez de crear una vacía y hacer creer que el contenido se borró.
-if (REQUIRE_DATA && BASE_NUEVA) {
+// Seguro para el modo SQLite: con REQUIRE_DATA=1 no se arranca sin la base.
+if (MOTOR === 'sqlite' && REQUIRE_DATA && BASE_NUEVA) {
   console.error(`[FATAL] REQUIRE_DATA está activado y no existe ${DB_FILE}.`);
   console.error('[FATAL] Casi seguro que el volumen persistente no está montado en ' + DATA_DIR + '.');
-  console.error('[FATAL] No se arranca para no crear una base vacía encima. Revisa el volumen y vuelve a desplegar.');
+  console.error('[FATAL] No se arranca para no crear una base vacía encima.');
   process.exit(1);
 }
+if (MOTOR === 'sqlite' && EFIMERO) {
+  console.warn(`[AVISO] ${DATA_DIR} NO es un volumen persistente: lo que se guarde ahí se pierde en cada despliegue.`);
+  console.warn('[AVISO] Solución: montar un volumen o configurar PostgreSQL (DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME).');
+}
 
-const db = new DatabaseSync(DB_FILE);
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
-db.exec(`
+// Conexión (con reintentos en Postgres: la base puede tardar en levantar tras un deploy).
+async function conectar() {
+  if (MOTOR === 'sqlite') return abrirDB({ motor: 'sqlite', sqliteFile: DB_FILE, uploadsDir: UPLOADS, mimePorExt });
+  let ultimo = null;
+  for (let intento = 1; intento <= 15; intento++) {
+    try {
+      const db = await abrirDB({ motor: 'postgres', pg: PG_CFG });
+      await db.query('SELECT 1');
+      return db;
+    } catch (err) {
+      ultimo = err;
+      console.warn(`[pg] intento ${intento}/15 fallido: ${err.message}`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  console.error('[FATAL] No se pudo conectar a PostgreSQL: ' + (ultimo && ultimo.message));
+  console.error('[FATAL] Revisa DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME en las variables de entorno.');
+  process.exit(1);
+}
+const db = await conectar();
+
+/* ================= ESQUEMA ================= */
+// Sin contenido de ejemplo: la app SIEMPRE empieza vacía y el equipo carga lo suyo.
+const IDCOL = MOTOR === 'postgres' ? 'INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY' : 'INTEGER PRIMARY KEY';
+await db.exec(`
 CREATE TABLE IF NOT EXISTS tasks(
-  id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL, done_on TEXT);
+  id ${IDCOL}, ord INTEGER, data TEXT NOT NULL, done_on TEXT, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS videos(
-  id INTEGER PRIMARY KEY, ord INTEGER, title TEXT, type TEXT, dur TEXT, guion TEXT, url TEXT DEFAULT '');
+  id ${IDCOL}, ord INTEGER, title TEXT, type TEXT, dur TEXT, guion TEXT, url TEXT DEFAULT '', archived_at TEXT);
 CREATE TABLE IF NOT EXISTS checklist(
-  id INTEGER PRIMARY KEY, ord INTEGER, day TEXT, item TEXT, done INTEGER DEFAULT 0);
+  id ${IDCOL}, ord INTEGER, day TEXT, item TEXT, done INTEGER DEFAULT 0, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS procesos(
-  id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL, url TEXT DEFAULT '');
+  id ${IDCOL}, ord INTEGER, data TEXT NOT NULL, url TEXT DEFAULT '', archived_at TEXT);
 CREATE TABLE IF NOT EXISTS products(
-  id TEXT PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
+  id TEXT PRIMARY KEY, ord INTEGER, data TEXT NOT NULL, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS media(
-  id INTEGER PRIMARY KEY, product_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT, url TEXT NOT NULL,
-  FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE);
+  id ${IDCOL}, product_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT, url TEXT NOT NULL,
+  nota TEXT DEFAULT '', ord INTEGER DEFAULT 0, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS ejemplos(
-  id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
+  id ${IDCOL}, ord INTEGER, data TEXT NOT NULL, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS attach(
-  id INTEGER PRIMARY KEY, owner TEXT NOT NULL, owner_id TEXT NOT NULL, kind TEXT NOT NULL,
-  title TEXT, url TEXT NOT NULL, ord INTEGER DEFAULT 0);
+  id ${IDCOL}, owner TEXT NOT NULL, owner_id TEXT NOT NULL, kind TEXT NOT NULL,
+  title TEXT, url TEXT NOT NULL, ord INTEGER DEFAULT 0, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS infos(
-  id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
+  id ${IDCOL}, ord INTEGER, data TEXT NOT NULL, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS guiones(
-  id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
+  id ${IDCOL}, ord INTEGER, data TEXT NOT NULL, archived_at TEXT);
 CREATE TABLE IF NOT EXISTS dudas(
-  id INTEGER PRIMARY KEY, created TEXT, autor TEXT, texto TEXT, url TEXT DEFAULT '',
-  estado TEXT DEFAULT 'abierta', respuesta TEXT DEFAULT '');
+  id ${IDCOL}, created TEXT, autor TEXT, texto TEXT, url TEXT DEFAULT '',
+  estado TEXT DEFAULT 'abierta', respuesta TEXT DEFAULT '', archived_at TEXT);
 CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
+${MOTOR === 'postgres' ? 'CREATE TABLE IF NOT EXISTS nova_files(name TEXT PRIMARY KEY, mime TEXT, data BYTEA, at TEXT);' : ''}
 `);
 
-const meta = (k) => db.prepare('SELECT v FROM meta WHERE k=?').get(k)?.v;
-const setMeta = (k, v) => db.prepare('INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v').run(k, String(v));
-
-// Migraciones sobre bases que ya existían.
-const columnas = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
-const addCol = (t, col, def) => { if (!columnas(t).includes(col)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${col} ${def}`); };
-addCol('media', 'nota', "TEXT DEFAULT ''");
-addCol('media', 'ord', 'INTEGER DEFAULT 0');
-
-const count = (t) => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
-
-// El contenido de ejemplo se inserta UNA sola vez en la vida de la base. Si el equipo
-// borra todas las tareas, un reinicio no se las devuelve: lo borrado, borrado se queda.
-const YA_SEMBRADA = meta('sembrada') === '1';
-const seed = (t, sql, rows) => {
-  if (YA_SEMBRADA || count(t)) return;
-  const st = db.prepare(sql);
-  rows.forEach((args) => st.run(...args));
+// Migraciones sobre bases que ya existían: sólo se AÑADEN columnas, nunca se quitan.
+const addCol = async (t, col, def) => {
+  if (!(await db.columnas(t)).includes(col)) await db.exec(`ALTER TABLE ${t} ADD COLUMN ${col} ${def}`);
 };
-seed('tasks', 'INSERT INTO tasks(ord,data) VALUES(?,?)', TASKS.map((t, i) => [i, JSON.stringify(t)]));
-seed('videos', 'INSERT INTO videos(ord,title,type,dur,guion) VALUES(?,?,?,?,?)', VIDEOS.map((v, i) => [i, v.title, v.type, v.dur, v.guion]));
-seed('checklist', 'INSERT INTO checklist(ord,day,item) VALUES(?,?,?)', CHECKLIST.flatMap((g, i) => g.items.map((it, j) => [i * 100 + j, g.day, it])));
-seed('procesos', 'INSERT INTO procesos(ord,data) VALUES(?,?)', PROCESOS.map((p, i) => [i, JSON.stringify(p)]));
-seed('products', 'INSERT INTO products(id,ord,data) VALUES(?,?,?)', PRODUCTS.map((p, i) => [p.id, i, JSON.stringify(p)]));
-seed('ejemplos', 'INSERT INTO ejemplos(ord,data) VALUES(?,?)', EJEMPLOS.map((e, i) => [i, JSON.stringify(e)]));
-seed('infos', 'INSERT INTO infos(ord,data) VALUES(?,?)', INFOS.map((x, i) => [i, JSON.stringify(x)]));
-seed('guiones', 'INSERT INTO guiones(ord,data) VALUES(?,?)', GUIONES.map((g, i) => [i, JSON.stringify(g)]));
-if (!YA_SEMBRADA) {
-  setMeta('sembrada', '1');
-  if (!meta('creada')) setMeta('creada', new Date().toISOString());
+await addCol('media', 'nota', "TEXT DEFAULT ''");
+await addCol('media', 'ord', 'INTEGER DEFAULT 0');
+for (const t of ['tasks', 'videos', 'checklist', 'procesos', 'products', 'media', 'ejemplos', 'attach', 'infos', 'guiones', 'dudas']) {
+  await addCol(t, 'archived_at', 'TEXT');
 }
+
+const TABLAS = ['tasks', 'videos', 'checklist', 'procesos', 'products', 'media', 'ejemplos', 'attach', 'infos', 'guiones', 'dudas'];
+const NUMERICAS = TABLAS.filter((t) => t !== 'products');
+
+const q = async (sql, params) => (await db.query(sql, params)).rows;
+const uno = async (sql, params) => (await q(sql, params))[0];
+const count = async (t) => Number((await uno(`SELECT COUNT(*) AS c FROM ${t}`)).c);
+const totalFilas = async () => {
+  let n = 0;
+  for (const t of TABLAS) n += await count(t);
+  return n;
+};
+
+const meta = async (k) => (await uno('SELECT v FROM meta WHERE k=?', [k]))?.v;
+const setMeta = (k, v) => db.query('INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=EXCLUDED.v', [k, String(v)]);
+
+// En Postgres, tras insertar con ids explícitos (importación o restauración) hay que
+// realinear las secuencias para que los próximos INSERT no choquen.
+async function ajustarSecuencias() {
+  if (MOTOR !== 'postgres') return;
+  for (const t of NUMERICAS) {
+    await db.query(`SELECT setval(pg_get_serial_sequence('${t}','id'), COALESCE((SELECT MAX(id) FROM ${t}), 0) + 1, false)`);
+  }
+}
+
+/* ================= IMPORTACIÓN ÚNICA DESDE SQLITE ================= */
+// Si Postgres está vacío y en el volumen quedó una base SQLite con contenido del equipo,
+// se importa UNA sola vez para no perder nada. Nunca se importa contenido de ejemplo:
+// se copia tal cual lo que hubiera.
+async function importarDesdeSQLite() {
+  if (MOTOR !== 'postgres' || await meta('importada_sqlite') || !existsSync(DB_FILE)) return;
+  if (await totalFilas() > 0) { await setMeta('importada_sqlite', 'saltada-pg-con-datos'); return; }
+  let vieja;
+  try {
+    const { DatabaseSync } = await import('node:sqlite');
+    vieja = new DatabaseSync(DB_FILE, { readOnly: true });
+  } catch (err) {
+    console.warn('[MIGRACIÓN] No se pudo abrir la base SQLite antigua:', err.message);
+    return;
+  }
+  let filas = 0, archivos = 0;
+  try {
+    await db.tx(async (tq) => {
+      for (const t of TABLAS) {
+        let rows = [];
+        try { rows = vieja.prepare(`SELECT * FROM ${t}`).all(); } catch { continue; }
+        if (!rows.length) continue;
+        const cols = (await db.columnas(t)).filter((c) => c in rows[0]);
+        for (const r of rows) {
+          await tq(
+            `INSERT INTO ${t}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`,
+            cols.map((c) => (r[c] === undefined ? null : r[c])),
+          );
+          filas += 1;
+        }
+      }
+    });
+    for (const name of await readdir(UPLOADS).catch(() => [])) {
+      if (!/^[\w.-]+$/.test(name) || !mimePorExt(name)) continue;
+      const data = await readFile(join(UPLOADS, name)).catch(() => null);
+      if (data) { await db.files.put(name, mimePorExt(name), data); archivos += 1; }
+    }
+    await ajustarSecuencias();
+    await setMeta('importada_sqlite', '1');
+    console.log(`[MIGRACIÓN] Importados ${filas} registros y ${archivos} archivos desde la base SQLite del volumen.`);
+  } catch (err) {
+    console.error('[MIGRACIÓN] Falló la importación desde SQLite (Postgres queda vacío):', err.message);
+  } finally {
+    vieja.close();
+  }
+}
+await importarDesdeSQLite();
+
+if (!(await meta('creada'))) await setMeta('creada', new Date().toISOString());
 const ARRANQUE = new Date().toISOString();
-setMeta('ultimo_arranque', ARRANQUE);
-setMeta('version', VERSION);
+await setMeta('ultimo_arranque', ARRANQUE);
+await setMeta('version', VERSION);
 
 /* ================= ESTADO ================= */
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
-const attachOf = (rows, owner, id, kind) =>
-  rows.filter((a) => a.owner === owner && a.owner_id === String(id) && a.kind === kind)
-    .map(({ id: aid, kind: k, title, url }) => ({ id: aid, kind: k, title, url }));
 
 // Los procesos guardaban un solo video en la columna `url`; ahora viven en data.vids.
 const procVids = (data, url) => {
@@ -135,34 +226,38 @@ const procVids = (data, url) => {
   return url ? [{ url, nota: '' }] : [];
 };
 
-function getState() {
+async function getState() {
   const hoy = today();
-  const media = db.prepare('SELECT id,product_id,kind,title,url,nota,ord FROM media ORDER BY ord, id').all();
-  const att = db.prepare('SELECT id,owner,owner_id,kind,title,url FROM attach ORDER BY ord, id').all();
+  const media = await q('SELECT id,product_id,kind,title,url,nota,ord FROM media WHERE archived_at IS NULL ORDER BY ord, id');
+  const att = await q('SELECT id,owner,owner_id,kind,title,url FROM attach WHERE archived_at IS NULL ORDER BY ord, id');
+  const attachOf = (owner, id, kind) => att
+    .filter((a) => a.owner === owner && a.owner_id === String(id) && a.kind === kind)
+    .map(({ id: aid, kind: k, title, url }) => ({ id: aid, kind: k, title, url }));
   return {
     hoy,
     version: VERSION,
+    motor: MOTOR,
     maxUploadMb: MAX_MB,
-    baseCreada: meta('creada') || null,
+    baseCreada: await meta('creada') || null,
     arrancado: ARRANQUE,
-    efimero: EFIMERO, // true = los datos NO están en un volumen persistente
-    tasks: db.prepare('SELECT id,data,done_on FROM tasks ORDER BY ord').all()
+    efimero: MOTOR === 'sqlite' ? EFIMERO : false,
+    tasks: (await q('SELECT id,data,done_on FROM tasks WHERE archived_at IS NULL ORDER BY ord'))
       .map((r) => ({ id: r.id, ...JSON.parse(r.data), done: r.done_on === hoy })),
-    videos: db.prepare('SELECT id,title,type,dur,guion,url FROM videos ORDER BY ord').all()
+    videos: (await q('SELECT id,title,type,dur,guion,url FROM videos WHERE archived_at IS NULL ORDER BY ord'))
       .map((v, i) => ({ ...v, n: i + 1 })),
-    checklist: db.prepare('SELECT id,ord,day,item,done FROM checklist ORDER BY ord').all()
+    checklist: (await q('SELECT id,ord,day,item,done FROM checklist WHERE archived_at IS NULL ORDER BY ord'))
       .reduce((acc, r) => {
         let g = acc.find((x) => x.day === r.day);
         if (!g) acc.push((g = { day: r.day, items: [] }));
         g.items.push({ id: r.id, text: r.item, done: !!r.done });
         return acc;
       }, []),
-    procesos: db.prepare('SELECT id,data,url FROM procesos ORDER BY ord').all()
+    procesos: (await q('SELECT id,data,url FROM procesos WHERE archived_at IS NULL ORDER BY ord'))
       .map((r) => {
         const data = JSON.parse(r.data);
         return { id: r.id, ...data, vids: procVids(data, r.url) };
       }),
-    products: db.prepare('SELECT id,data FROM products ORDER BY ord').all()
+    products: (await q('SELECT id,data FROM products WHERE archived_at IS NULL ORDER BY ord'))
       .map((r) => ({
         ...JSON.parse(r.data),
         id: r.id,
@@ -171,20 +266,17 @@ function getState() {
           videos: media.filter((m) => m.product_id === r.id && m.kind === 'video'),
         },
       })),
-    ejemplos: db.prepare('SELECT id,data FROM ejemplos ORDER BY ord').all()
+    ejemplos: (await q('SELECT id,data FROM ejemplos WHERE archived_at IS NULL ORDER BY ord'))
       .map((r) => ({
         id: r.id,
         ...JSON.parse(r.data),
-        media: {
-          images: attachOf(att, 'ejemplo', r.id, 'image'),
-          audios: attachOf(att, 'ejemplo', r.id, 'audio'),
-        },
+        media: { images: attachOf('ejemplo', r.id, 'image'), audios: attachOf('ejemplo', r.id, 'audio') },
       })),
-    infos: db.prepare('SELECT id,data FROM infos ORDER BY ord').all()
+    infos: (await q('SELECT id,data FROM infos WHERE archived_at IS NULL ORDER BY ord'))
       .map((r) => ({ id: r.id, ...JSON.parse(r.data) })),
-    guiones: db.prepare('SELECT id,data FROM guiones ORDER BY ord').all()
+    guiones: (await q('SELECT id,data FROM guiones WHERE archived_at IS NULL ORDER BY ord'))
       .map((r) => ({ id: r.id, ...JSON.parse(r.data) })),
-    dudas: db.prepare('SELECT id,created,autor,texto,url,estado,respuesta FROM dudas ORDER BY id DESC').all(),
+    dudas: await q('SELECT id,created,autor,texto,url,estado,respuesta FROM dudas WHERE archived_at IS NULL ORDER BY id DESC'),
   };
 }
 
@@ -228,6 +320,12 @@ const tips = (v) => objList(v, 20, (t) => {
   return x ? { t: oneOf(t?.t, ['info', 'warn', 'alert'], 'info'), x } : null;
 });
 
+// Qué hacer según cómo salga: mismo formato en tareas y en procesos.
+const outcomes = (v) => objList(v, 12, (o) => {
+  const t = str(o?.t, 200), r = text(o?.r, 900);
+  return t || r ? { k: oneOf(o?.k, ['ok', 'warn', 'bad'], 'ok'), t, r } : null;
+});
+
 const normTask = (b) => ({
   time: TIME_RE.test(str(b.time, 5)) ? str(b.time, 5) : '09:00',
   block: str(b.block, 60) || 'General',
@@ -269,12 +367,6 @@ const trimVids = (arr) => {
 const normVids = (v) => trimVids((Array.isArray(v) ? v : []).slice(0, 2)
   .map((x) => ({ url: urlOrFail(x?.url), nota: text(x?.nota, 400) })));
 
-// Qué hacer según cómo salga: mismo formato en tareas y en procesos.
-const outcomes = (v) => objList(v, 12, (o) => {
-  const t = str(o?.t, 200), r = text(o?.r, 900);
-  return t || r ? { k: oneOf(o?.k, ['ok', 'warn', 'bad'], 'ok'), t, r } : null;
-});
-
 const normProceso = (b) => ({
   name: req(b.name, 160, 'el nombre'),
   when: str(b.when, 120),
@@ -291,8 +383,8 @@ const normProducto = (b) => ({
   price: str(b.price, 60),
   desc: text(b.desc, 1500),
   packs: objList(b.packs, 12, (p) => {
-    const q = str(p?.q, 60), pr = str(p?.p, 40);
-    return q || pr ? { q, p: pr, ...(p?.best ? { best: true } : {}) } : null;
+    const q2 = str(p?.q, 60), pr = str(p?.p, 40);
+    return q2 || pr ? { q: q2, p: pr, ...(p?.best ? { best: true } : {}) } : null;
   }),
   beneficios: strList(b.beneficios, 25, 200),
   specs: objList(b.specs, 25, (s) => {
@@ -300,8 +392,8 @@ const normProducto = (b) => ({
     return k || v ? { k, v } : null;
   }),
   objeciones: objList(b.objeciones, 25, (o) => {
-    const q = str(o?.o, 200), r = text(o?.r, 900);
-    return q || r ? { o: q, r } : null;
+    const q2 = str(o?.o, 200), r = text(o?.r, 900);
+    return q2 || r ? { o: q2, r } : null;
   }),
   argumentos: text(b.argumentos, 1500),
   // Qué lo hace diferente: texto, comparativa contra otros y un video que lo explique.
@@ -351,8 +443,8 @@ const normGuion = (b) => ({
     return n || t ? { n, t } : null;
   }),
   qas: objList(b.qas, 30, (x) => {
-    const q = text(x?.q, 300), r = text(x?.r, 2000), nota = text(x?.nota, 400);
-    return q || r ? { q, r, nota } : null;
+    const q2 = text(x?.q, 300), r = text(x?.r, 2000), nota = text(x?.nota, 400);
+    return q2 || r ? { q: q2, r, nota } : null;
   }),
   cierre: text(b.cierre, 1200),
   tips: tips(b.tips),
@@ -369,33 +461,39 @@ const normInfo = (b) => ({
 });
 
 /* ================= HELPERS DE TABLA ================= */
-const nextOrd = (t) => db.prepare(`SELECT COALESCE(MAX(ord),-1)+1 n FROM ${t}`).get().n;
+const idVal = (t, id) => (t === 'products' ? String(id) : Number(id));
+const nextOrd = async (t) => Number((await uno(`SELECT COALESCE(MAX(ord),-1)+1 AS n FROM ${t}`)).n);
 
-const must = (t, id, col = 'id') => {
-  const row = db.prepare(`SELECT * FROM ${t} WHERE ${col}=?`).get(col === 'id' && t !== 'products' ? Number(id) : id);
+const must = async (t, id) => {
+  const row = await uno(`SELECT * FROM ${t} WHERE id=?`, [idVal(t, id)]);
   if (!row) throw new HttpError(404, 'No existe');
   return row;
 };
 
-const removeRow = (t, id) => {
-  must(t, id);
-  db.prepare(`DELETE FROM ${t} WHERE id=?`).run(t === 'products' ? id : Number(id));
-};
+// No existe eliminar directo: primero SIEMPRE se archiva. Desde el archivo se
+// puede restaurar o, ahí sí, eliminar definitivamente.
+async function archivar(t, id) {
+  const row = await must(t, id);
+  if (row.archived_at) throw new HttpError(400, 'Ya está en el archivo');
+  await db.query(`UPDATE ${t} SET archived_at=? WHERE id=?`, [new Date().toISOString(), idVal(t, id)]);
+  return row;
+}
 
 // Guarda el orden que llega desde el arrastre: la posición en el array es el nuevo `ord`.
-function setOrder(t, ids, isText) {
+async function setOrder(t, ids, isText) {
   const list = (Array.isArray(ids) ? ids : []).slice(0, 500);
   if (!list.length) throw new HttpError(400, 'Orden vacío');
-  const up = db.prepare(`UPDATE ${t} SET ord=? WHERE id=?`);
-  list.forEach((id, i) => up.run(i, isText ? String(id) : Number(id)));
+  for (let i = 0; i < list.length; i++) {
+    await db.query(`UPDATE ${t} SET ord=? WHERE id=?`, [i, isText ? String(list[i]) : Number(list[i])]);
+  }
   return list.length;
 }
 
 // El checklist se reordena dentro de un día sin mover los demás grupos de sitio.
-function setChecklistOrder(ids) {
+async function setChecklistOrder(ids) {
   const wanted = (Array.isArray(ids) ? ids : []).map(Number);
   if (!wanted.length) throw new HttpError(400, 'Orden vacío');
-  const rows = db.prepare('SELECT id, day FROM checklist ORDER BY ord').all();
+  const rows = await q('SELECT id, day FROM checklist WHERE archived_at IS NULL ORDER BY ord');
   const day = rows.find((r) => r.id === wanted[0])?.day;
   if (day === undefined) throw new HttpError(404, 'No existe');
   const queue = wanted.filter((id) => rows.some((r) => r.id === id && r.day === day));
@@ -404,31 +502,22 @@ function setChecklistOrder(ids) {
 }
 
 // El runbook siempre se muestra en orden cronológico: el `ord` se recalcula por hora.
-function reorderTasksByTime() {
-  const rows = db.prepare('SELECT id, data FROM tasks').all()
+async function reorderTasksByTime() {
+  const rows = (await q('SELECT id, data FROM tasks WHERE archived_at IS NULL'))
     .map((r) => ({ id: r.id, time: JSON.parse(r.data).time || '00:00' }))
     .sort((a, b) => a.time.localeCompare(b.time) || a.id - b.id);
-  const up = db.prepare('UPDATE tasks SET ord=? WHERE id=?');
-  rows.forEach((r, i) => up.run(i, r.id));
+  for (let i = 0; i < rows.length; i++) await db.query('UPDATE tasks SET ord=? WHERE id=?', [i, rows[i].id]);
 }
 
 const slug = (s) => str(s, 60).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'producto';
-const freeId = (base) => {
+const freeId = async (base) => {
   let id = base, n = 2;
-  while (db.prepare('SELECT 1 FROM products WHERE id=?').get(id)) id = `${base}-${n++}`;
+  while (await uno('SELECT 1 AS x FROM products WHERE id=?', [id])) id = `${base}-${n++}`;
   return id;
 };
 
 /* ================= ARCHIVOS SUBIDOS ================= */
-const EXT = {
-  'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif',
-  'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a',
-  'audio/aac': '.aac', 'audio/ogg': '.ogg', 'audio/wav': '.wav', 'audio/x-wav': '.wav', 'audio/webm': '.weba',
-  'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
-};
-const MIME_BY_EXT = Object.fromEntries(Object.entries(EXT).map(([m, e]) => [e, m]));
-
 const readRaw = (request, limit) => new Promise((resolve, reject) => {
   const chunks = [];
   let size = 0;
@@ -448,49 +537,49 @@ async function handleUpload(request, res) {
   const buf = await readRaw(request, MAX_MB * 1024 * 1024);
   if (!buf.length) throw new HttpError(400, 'Archivo vacío');
   const name = randomUUID() + ext;
-  await writeFile(join(UPLOADS, name), buf);
+  await db.files.put(name, type, buf);
   const kind = type.startsWith('image/') ? 'image' : type.startsWith('audio/') ? 'audio' : 'video';
   return json(res, 201, { url: '/uploads/' + name, kind, size: buf.length });
 }
 
-// Un mismo archivo puede estar reutilizado desde la biblioteca en varios sitios,
-// así que sólo se borra del disco cuando ya no queda ninguna referencia.
+// Un mismo archivo puede estar reutilizado en varios sitios (incluido el archivo de borrados):
+// sólo se elimina del almacén cuando no queda NINGUNA referencia.
 const REF_COLS = [['videos', 'url'], ['media', 'url'], ['attach', 'url'], ['dudas', 'url']];
 const REF_JSON = ['procesos', 'tasks', 'products'];
-function urlEnUso(url) {
-  for (const [t, col] of REF_COLS) if (db.prepare(`SELECT 1 FROM ${t} WHERE ${col}=? LIMIT 1`).get(url)) return true;
-  for (const t of REF_JSON) if (db.prepare(`SELECT 1 FROM ${t} WHERE instr(data, ?) > 0 LIMIT 1`).get(url)) return true;
+async function urlEnUso(url) {
+  for (const [t, col] of REF_COLS) {
+    if (await uno(`SELECT 1 AS x FROM ${t} WHERE ${col}=? LIMIT 1`, [url])) return true;
+  }
+  const like = MOTOR === 'postgres' ? 'POSITION(? IN data) > 0' : 'instr(data, ?) > 0';
+  for (const t of REF_JSON) {
+    if (await uno(`SELECT 1 AS x FROM ${t} WHERE ${like} LIMIT 1`, [url])) return true;
+  }
   return false;
 }
 // Llamar SIEMPRE después de haber quitado la referencia en la base.
 const gcUpload = async (url) => {
   const m = /^\/uploads\/([\w.-]+)$/.exec(String(url || ''));
-  if (!m || urlEnUso(url)) return;
-  await unlink(join(UPLOADS, basename(m[1]))).catch(() => {});
+  if (!m || await urlEnUso(url)) return;
+  await db.files.del(basename(m[1]));
 };
 
 async function listarBiblioteca() {
-  const names = await readdir(UPLOADS).catch(() => []);
-  const files = [];
-  for (const name of names) {
-    if (!/^[\w.-]+$/.test(name)) continue;
-    const mime = MIME_BY_EXT[extname(name)];
-    if (!mime) continue;
-    const st = await stat(join(UPLOADS, name)).catch(() => null);
-    if (!st) continue;
-    const url = '/uploads/' + name;
-    files.push({
+  const files = (await db.files.list()).slice(0, 300);
+  const out = [];
+  for (const f of files) {
+    const url = '/uploads/' + f.name;
+    out.push({
       url,
-      kind: mime.startsWith('image/') ? 'image' : mime.startsWith('audio/') ? 'audio' : 'video',
-      size: st.size,
-      at: st.mtimeMs,
-      enUso: urlEnUso(url),
+      kind: f.mime.startsWith('image/') ? 'image' : f.mime.startsWith('audio/') ? 'audio' : 'video',
+      size: f.size,
+      at: f.at,
+      enUso: await urlEnUso(url),
     });
   }
-  return files.sort((a, b) => b.at - a.at).slice(0, 300);
+  return out;
 }
 
-/* ================= ZIP (descarga masiva) ================= */
+/* ================= ZIP ================= */
 // ZIP sin comprimir, escrito a mano para no añadir dependencias.
 const CRC = (() => {
   const t = new Uint32Array(256);
@@ -557,18 +646,18 @@ const sinAcentos = (s) => str(s, 60).normalize('NFD').replace(/[̀-ͯ]/g, '').re
 
 // Todo el material de un producto que vive en este servidor, en un solo archivo.
 async function zipProducto(res, id) {
-  const p = must('products', id);
+  const p = await must('products', id);
   const nombre = JSON.parse(p.data).name || id;
-  const rows = db.prepare('SELECT kind,title,url,ord FROM media WHERE product_id=? ORDER BY ord, id').all(id)
+  const rows = (await q('SELECT kind,title,url,ord FROM media WHERE product_id=? AND archived_at IS NULL ORDER BY ord, id', [id]))
     .filter((m) => /^\/uploads\/[\w.-]+$/.test(m.url));
   if (!rows.length) throw new HttpError(404, 'Este producto no tiene archivos subidos a este servidor (los links externos no se pueden empaquetar)');
   const entries = [];
   let n = 0;
   for (const m of rows) {
-    const data = await readFile(join(UPLOADS, basename(m.url))).catch(() => null);
-    if (!data) continue;
+    const f = await db.files.get(basename(m.url));
+    if (!f) continue;
     n += 1;
-    entries.push({ name: `${String(n).padStart(2, '0')}-${sinAcentos(m.title) || m.kind}${extname(m.url)}`, data });
+    entries.push({ name: `${String(n).padStart(2, '0')}-${sinAcentos(m.title) || m.kind}${extname(m.url)}`, data: f.data });
   }
   if (!entries.length) throw new HttpError(404, 'No se encontraron los archivos');
   const zip = zipFiles(entries);
@@ -581,42 +670,39 @@ async function zipProducto(res, id) {
 }
 
 /* ================= COPIA DE SEGURIDAD ================= */
-const TABLAS = ['tasks', 'videos', 'checklist', 'procesos', 'products', 'media', 'ejemplos', 'attach', 'infos', 'dudas', 'guiones'];
-
-const backupJSON = () => {
+const backupJSON = async () => {
   const out = { app: 'nova-onboarding', version: VERSION, fecha: new Date().toISOString(), tablas: {} };
-  for (const t of TABLAS) out.tablas[t] = db.prepare(`SELECT * FROM ${t}`).all();
+  for (const t of TABLAS) out.tablas[t] = await q(`SELECT * FROM ${t}`);
   return out;
 };
 
-function restaurar(b) {
+async function restaurar(b) {
   if (!b || typeof b !== 'object' || !b.tablas) throw new HttpError(400, 'El archivo no parece una copia de esta app');
-  db.exec('BEGIN');
-  try {
+  await db.tx(async (tq) => {
     for (const t of TABLAS) {
-      db.exec(`DELETE FROM ${t}`);
+      await tq(`DELETE FROM ${t}`);
       const rows = Array.isArray(b.tablas[t]) ? b.tablas[t] : [];
       if (!rows.length) continue;
-      const cols = columnas(t).filter((c) => c in rows[0]);
-      const st = db.prepare(`INSERT INTO ${t}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`);
-      for (const r of rows) st.run(...cols.map((c) => (r[c] === undefined || r[c] === null ? null : r[c])));
+      const cols = (await db.columnas(t)).filter((c) => c in rows[0]);
+      for (const r of rows) {
+        await tq(
+          `INSERT INTO ${t}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`,
+          cols.map((c) => (r[c] === undefined ? null : r[c])),
+        );
+      }
     }
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw new HttpError(400, 'No se pudo restaurar: ' + err.message);
-  }
+  });
+  await ajustarSecuencias();
 }
 
-// Instantáneas automáticas dentro del volumen: protegen de borrados accidentales y de
-// restauraciones equivocadas. No sustituyen a bajarse la copia: si el volumen se pierde,
-// estas se pierden con él.
-function snapshot(motivo) {
+// Instantáneas automáticas en disco: protegen de borrados y restauraciones equivocadas.
+// La fuente de verdad es la base (Postgres en producción); esto es un colchón extra.
+async function snapshot(motivo) {
   try {
-    if (!TABLAS.reduce((n, t) => n + count(t), 0)) return null;
+    if (!(await totalFilas())) return null;
     const sello = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const name = `${sello}-${motivo}.json`;
-    writeFileSync(join(BACKUPS, name), JSON.stringify(backupJSON()));
+    writeFileSync(join(BACKUPS, name), JSON.stringify(await backupJSON()));
     const previas = readdirSync(BACKUPS).filter((f) => f.endsWith('.json')).sort();
     for (const f of previas.slice(0, Math.max(0, previas.length - MAX_SNAPS))) rmSync(join(BACKUPS, f), { force: true });
     return name;
@@ -632,7 +718,7 @@ const listarSnapshots = () => readdirSync(BACKUPS).filter((f) => f.endsWith('.js
     return { name, size: st.size, at: st.mtimeMs };
   });
 
-// Lector de ZIP mínimo, para poder devolver una copia completa (contenido + archivos).
+// Lector de ZIP mínimo, para poder restaurar una copia completa (contenido + archivos).
 function unzip(buf) {
   const out = {};
   let i = 0;
@@ -652,6 +738,59 @@ function unzip(buf) {
   return out;
 }
 
+/* ================= ARCHIVO (borrado en dos pasos) ================= */
+const ARCH = {
+  tasks: { tipo: 'Tarea del runbook', titulo: (r) => JSON.parse(r.data).title },
+  videos: { tipo: 'Video de onboarding', titulo: (r) => r.title },
+  checklist: { tipo: 'Ítem del checklist', titulo: (r) => `${r.day} · ${r.item}` },
+  procesos: { tipo: 'Proceso', titulo: (r) => JSON.parse(r.data).name },
+  products: { tipo: 'Producto', titulo: (r) => JSON.parse(r.data).name },
+  ejemplos: { tipo: 'Ejemplo', titulo: (r) => JSON.parse(r.data).title },
+  infos: { tipo: 'Información del negocio', titulo: (r) => JSON.parse(r.data).title },
+  guiones: { tipo: 'Guion', titulo: (r) => JSON.parse(r.data).title },
+  dudas: { tipo: 'Duda de soporte', titulo: (r) => String(r.texto || '').slice(0, 90) },
+  media: { tipo: 'Archivo de producto', titulo: (r) => r.title },
+  attach: { tipo: 'Adjunto de ejemplo', titulo: (r) => r.title },
+};
+
+async function listarArchivo() {
+  const out = [];
+  for (const [t, def] of Object.entries(ARCH)) {
+    for (const r of await q(`SELECT * FROM ${t} WHERE archived_at IS NOT NULL`)) {
+      let titulo = '';
+      try { titulo = def.titulo(r) || ''; } catch { titulo = ''; }
+      out.push({ ent: t, id: r.id, tipo: def.tipo, titulo: String(titulo).slice(0, 120), fecha: r.archived_at });
+    }
+  }
+  return out.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+}
+
+// Eliminar definitivo: SÓLO sobre algo ya archivado, con limpieza de sus archivos.
+async function eliminarDefinitivo(t, id) {
+  if (!ARCH[t]) throw new HttpError(404, 'No existe');
+  const row = await must(t, id);
+  if (!row.archived_at) throw new HttpError(400, 'Primero archívalo: sólo se elimina definitivamente desde el archivo');
+  const urls = [];
+  if (t === 'videos' || t === 'media' || t === 'attach' || t === 'dudas') urls.push(row.url);
+  if (t === 'tasks') urls.push(JSON.parse(row.data).url);
+  if (t === 'procesos') {
+    const data = JSON.parse(row.data);
+    for (const v of procVids(data, row.url)) urls.push(v.url);
+  }
+  if (t === 'products') {
+    const data = JSON.parse(row.data);
+    urls.push(data.difUrl);
+    for (const m of await q('SELECT url FROM media WHERE product_id=?', [row.id])) urls.push(m.url);
+    await db.query('DELETE FROM media WHERE product_id=?', [row.id]);
+  }
+  if (t === 'ejemplos') {
+    for (const a of await q('SELECT url FROM attach WHERE owner=? AND owner_id=?', ['ejemplo', String(row.id)])) urls.push(a.url);
+    await db.query('DELETE FROM attach WHERE owner=? AND owner_id=?', ['ejemplo', String(row.id)]);
+  }
+  await db.query(`DELETE FROM ${t} WHERE id=?`, [idVal(t, id)]);
+  for (const u of urls) await gcUpload(u);
+}
+
 /* ================= HTTP ================= */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png' };
 
@@ -668,6 +807,7 @@ const readBody = (request) => new Promise((resolve, reject) => {
 });
 
 const ok = (res) => json(res, 200, { ok: true });
+const archivado = (res) => json(res, 200, { ok: true, archivado: true });
 
 async function api(request, res, path) {
   const seg = path.split('/').filter(Boolean).slice(1); // sin 'api'
@@ -675,13 +815,16 @@ async function api(request, res, path) {
   const M = request.method;
 
   if (ent === 'uploads' && M === 'POST') return handleUpload(request, res);
+  // Biblioteca interna: todo lo que ya se subió, para reutilizarlo sin volver a subirlo.
+  if (ent === 'library' && M === 'GET' && !id) return json(res, 200, { files: await listarBiblioteca() });
 
   /* ---------- PRUEBA DE CONEXIÓN A POSTGRES ---------- */
-  // Sólo comprueba que se puede conectar con las variables de entorno; no toca ningún dato.
+  // Sólo comprueba que se puede conectar; admite ?host=&port=… para probar otro destino.
   if (ent === 'pgtest' && M === 'GET') {
-    const E = process.env;
-    const cs = E.DATABASE_URL || E.POSTGRES_URL || '';
-    const host = E.PGHOST || E.POSTGRES_HOST || E.DB_HOST || '';
+    const sp = new URL(request.url, 'http://x').searchParams;
+    const ov = (k) => sp.get(k) || '';
+    const cs = ov('url') || PG_URL;
+    const host = ov('host') || PG_HOST;
     if (!cs && !host) {
       return json(res, 200, {
         ok: false, configurado: false,
@@ -692,17 +835,17 @@ async function api(request, res, path) {
     try { ({ default: pg } = await import('pg')); }
     catch { return json(res, 200, { ok: false, configurado: true, error: 'El módulo pg no está en esta build. Redespliega para que la imagen lo instale.' }); }
     const t0 = Date.now();
-    const client = new pg.Client(cs ? {
+    const client = new pg.Client(cs && !ov('host') ? {
       connectionString: cs,
       connectionTimeoutMillis: 6000,
     } : {
       host,
-      port: Number(E.PGPORT || E.POSTGRES_PORT || E.DB_PORT || 5432),
-      user: E.PGUSER || E.POSTGRES_USER || E.DB_USER || 'postgres',
-      password: E.PGPASSWORD || E.POSTGRES_PASSWORD || E.DB_PASSWORD || '',
-      database: E.PGDATABASE || E.POSTGRES_DB || E.DB_NAME || 'postgres',
+      port: Number(ov('port') || PG_CFG.port || 5432),
+      user: ov('user') || PG_CFG.user || 'postgres',
+      password: ov('password') || PG_CFG.password || '',
+      database: ov('database') || PG_CFG.database || 'postgres',
       connectionTimeoutMillis: 6000,
-      ssl: /^(1|true)$/i.test(E.PGSSL || E.DB_SSL || '') ? { rejectUnauthorized: false } : undefined,
+      ssl: /^(1|true)$/i.test(ov('ssl')) ? { rejectUnauthorized: false } : PG_CFG.ssl,
     });
     try {
       await client.connect();
@@ -711,6 +854,7 @@ async function api(request, res, path) {
         ok: true, configurado: true, ms: Date.now() - t0,
         base: r.rows[0].db,
         version: String(r.rows[0].v).split(' on ')[0],
+        motorActual: MOTOR,
       });
     } catch (err) {
       return json(res, 200, { ok: false, configurado: true, ms: Date.now() - t0, error: String(err.message || err) });
@@ -721,13 +865,12 @@ async function api(request, res, path) {
 
   /* ---------- COPIA DE SEGURIDAD ---------- */
   if (ent === 'backup' && M === 'GET') {
-    const datos = backupJSON();
+    const datos = await backupJSON();
     if (id === 'zip') {
       const entries = [{ name: 'contenido.json', data: Buffer.from(JSON.stringify(datos, null, 2), 'utf8') }];
-      for (const name of await readdir(UPLOADS).catch(() => [])) {
-        if (!/^[\w.-]+$/.test(name)) continue;
-        const data = await readFile(join(UPLOADS, name)).catch(() => null);
-        if (data) entries.push({ name: 'uploads/' + name, data });
+      for (const f of await db.files.list()) {
+        const file = await db.files.get(f.name);
+        if (file) entries.push({ name: 'uploads/' + f.name, data: file.data });
       }
       const zip = zipFiles(entries);
       res.writeHead(200, {
@@ -758,7 +901,7 @@ async function api(request, res, path) {
     if (!raw.length) throw new HttpError(400, 'No llegó ningún archivo');
     let restaurados = 0;
     // Antes de tocar nada se guarda cómo estaba, por si la restauración era la equivocada.
-    const previa = snapshot('antes-de-restaurar');
+    const previa = await snapshot('antes-de-restaurar');
 
     // Restaurar una instantánea del propio servidor: { "snapshot": "…json" }
     if (tipo === 'application/json') {
@@ -767,148 +910,151 @@ async function api(request, res, path) {
       if (posible && typeof posible.snapshot === 'string') {
         const name = basename(posible.snapshot);
         if (!/^[\w.-]+\.json$/.test(name) || !existsSync(join(BACKUPS, name))) throw new HttpError(404, 'No existe esa instantánea');
-        restaurar(JSON.parse(readFileSync(join(BACKUPS, name), 'utf8')));
+        await restaurar(JSON.parse(readFileSync(join(BACKUPS, name), 'utf8')));
         return json(res, 200, { ok: true, archivos: 0, previa });
       }
     }
+
     if (tipo === 'application/zip' || raw.readUInt32LE(0) === 0x04034b50) {
       const files = unzip(raw);
       const contenido = files['contenido.json'];
       if (!contenido) throw new HttpError(400, 'El ZIP no trae contenido.json');
-      restaurar(JSON.parse(contenido.toString('utf8')));
+      await restaurar(JSON.parse(contenido.toString('utf8')));
       for (const [name, data] of Object.entries(files)) {
         if (!name.startsWith('uploads/')) continue;
         const base = basename(name);
-        if (!/^[\w.-]+$/.test(base)) continue;
-        await writeFile(join(UPLOADS, base), data);
+        if (!/^[\w.-]+$/.test(base) || !mimePorExt(base)) continue;
+        await db.files.put(base, mimePorExt(base), data);
         restaurados += 1;
       }
     } else {
-      restaurar(JSON.parse(raw.toString('utf8')));
+      await restaurar(JSON.parse(raw.toString('utf8')));
     }
     return json(res, 200, { ok: true, archivos: restaurados, previa });
   }
 
-  // Biblioteca interna: todo lo que ya se subió, para reutilizarlo sin volver a subirlo.
-  if (ent === 'library' && M === 'GET' && !id) return json(res, 200, { files: await listarBiblioteca() });
+  /* ---------- ARCHIVO: restaurar o eliminar definitivamente ---------- */
+  if (ent === 'archivo') {
+    if (M === 'GET' && !id) return json(res, 200, { archivo: await listarArchivo() });
+    if (!ARCH[id]) throw new HttpError(404, 'No existe');
+    if (M === 'POST' && sub && seg[3] === 'restaurar') {
+      const row = await must(id, sub);
+      if (!row.archived_at) throw new HttpError(400, 'No está archivado');
+      await db.query(`UPDATE ${id} SET archived_at=NULL WHERE id=?`, [idVal(id, sub)]);
+      if (id === 'tasks') await reorderTasksByTime();
+      return ok(res);
+    }
+    if (M === 'DELETE' && sub && !seg[3]) {
+      await eliminarDefinitivo(id, sub);
+      return ok(res);
+    }
+  }
 
   const body = M === 'GET' ? {} : await readBody(request);
 
-  if (M === 'GET' && ent === 'state' && !id) return json(res, 200, getState());
+  if (M === 'GET' && ent === 'state' && !id) return json(res, 200, await getState());
 
   /* ---------- TAREAS DEL RUNBOOK ---------- */
   if (ent === 'tasks') {
     if (M === 'POST' && !id) {
-      const r = db.prepare('INSERT INTO tasks(ord,data) VALUES(?,?)').run(nextOrd('tasks'), JSON.stringify(normTask(body)));
-      reorderTasksByTime();
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO tasks(ord,data) VALUES(?,?) RETURNING id', [await nextOrd('tasks'), JSON.stringify(normTask(body))]);
+      await reorderTasksByTime();
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && sub === 'done') {
-      must('tasks', id);
-      db.prepare('UPDATE tasks SET done_on=? WHERE id=?').run(body.done ? today() : null, Number(id));
+      await must('tasks', id);
+      await db.query('UPDATE tasks SET done_on=? WHERE id=?', [body.done ? today() : null, Number(id)]);
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      const old = JSON.parse(must('tasks', id).data);
-      db.prepare('UPDATE tasks SET data=? WHERE id=?').run(JSON.stringify(normTask(body)), Number(id));
-      reorderTasksByTime();
+      const old = JSON.parse((await must('tasks', id)).data);
+      await db.query('UPDATE tasks SET data=? WHERE id=?', [JSON.stringify(normTask(body)), Number(id)]);
+      await reorderTasksByTime();
       await gcUpload(old.url);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) {
-      const old = JSON.parse(must('tasks', id).data);
-      removeRow('tasks', id);
-      await gcUpload(old.url);
-      return ok(res);
-    }
+    if (M === 'DELETE' && id && !sub) { await archivar('tasks', id); return archivado(res); }
   }
 
   /* ---------- VIDEOS DE ONBOARDING ---------- */
   if (ent === 'videos') {
-    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('videos', body.ids) });
-    // Vaciar la sección entera de una vez (la app pide confirmación antes).
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: await setOrder('videos', body.ids) });
+    // Vaciar la sección entera de una vez: también pasa por el archivo, no se destruye nada.
     if (M === 'POST' && id === 'vaciar') {
-      const urls = db.prepare('SELECT url FROM videos').all().map((v) => v.url);
-      const n = db.prepare('DELETE FROM videos').run().changes;
-      for (const u of urls) await gcUpload(u);
-      return json(res, 200, { ok: true, borrados: n });
+      const r = await db.query('UPDATE videos SET archived_at=? WHERE archived_at IS NULL', [new Date().toISOString()]);
+      return json(res, 200, { ok: true, borrados: r.rowCount });
     }
     if (M === 'POST' && !id) {
       const v = normVideo(body);
-      const r = db.prepare('INSERT INTO videos(ord,title,type,dur,guion,url) VALUES(?,?,?,?,?,?)')
-        .run(nextOrd('videos'), v.title, v.type, v.dur, v.guion, v.url);
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO videos(ord,title,type,dur,guion,url) VALUES(?,?,?,?,?,?) RETURNING id',
+        [await nextOrd('videos'), v.title, v.type, v.dur, v.guion, v.url]);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && sub === 'url') {
-      const old = must('videos', id);
+      const old = await must('videos', id);
       const url = urlOrFail(body.url);
-      db.prepare('UPDATE videos SET url=? WHERE id=?').run(url, Number(id));
+      await db.query('UPDATE videos SET url=? WHERE id=?', [url, Number(id)]);
       if (old.url !== url) await gcUpload(old.url);
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      const old = must('videos', id);
+      const old = await must('videos', id);
       const v = normVideo(body);
-      db.prepare('UPDATE videos SET title=?,type=?,dur=?,guion=?,url=? WHERE id=?')
-        .run(v.title, v.type, v.dur, v.guion, v.url, Number(id));
+      await db.query('UPDATE videos SET title=?,type=?,dur=?,guion=?,url=? WHERE id=?',
+        [v.title, v.type, v.dur, v.guion, v.url, Number(id)]);
       if (old.url !== v.url) await gcUpload(old.url);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) {
-      const old = must('videos', id);
-      removeRow('videos', id);
-      await gcUpload(old.url);
-      return ok(res);
-    }
+    if (M === 'DELETE' && id && !sub) { await archivar('videos', id); return archivado(res); }
   }
 
   /* ---------- CHECKLIST ---------- */
   if (ent === 'checklist') {
-    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setChecklistOrder(body.ids) });
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: await setChecklistOrder(body.ids) });
     if (M === 'POST' && id === 'vaciar') {
-      const n = db.prepare('DELETE FROM checklist').run().changes;
-      return json(res, 200, { ok: true, borrados: n });
+      const r = await db.query('UPDATE checklist SET archived_at=? WHERE archived_at IS NULL', [new Date().toISOString()]);
+      return json(res, 200, { ok: true, borrados: r.rowCount });
     }
     if (M === 'POST' && !id) {
       const c = normCheck(body);
       // El ítem nuevo entra al final de su día; si el día no existe, al final de todo.
-      const last = db.prepare('SELECT MAX(ord) m FROM checklist WHERE day=?').get(c.day).m;
+      const last = (await uno('SELECT MAX(ord) AS m FROM checklist WHERE day=? AND archived_at IS NULL', [c.day]))?.m;
       let ord;
       if (last === null || last === undefined) {
-        ord = nextOrd('checklist');
+        ord = await nextOrd('checklist');
       } else {
-        ord = last + 1;
-        db.prepare('UPDATE checklist SET ord = ord + 1 WHERE ord >= ?').run(ord);
+        ord = Number(last) + 1;
+        await db.query('UPDATE checklist SET ord = ord + 1 WHERE ord >= ?', [ord]);
       }
-      const r = db.prepare('INSERT INTO checklist(ord,day,item) VALUES(?,?,?)').run(ord, c.day, c.item);
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO checklist(ord,day,item) VALUES(?,?,?) RETURNING id', [ord, c.day, c.item]);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && sub === 'done') {
-      must('checklist', id);
-      db.prepare('UPDATE checklist SET done=? WHERE id=?').run(body.done ? 1 : 0, Number(id));
+      await must('checklist', id);
+      await db.query('UPDATE checklist SET done=? WHERE id=?', [body.done ? 1 : 0, Number(id)]);
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      must('checklist', id);
+      await must('checklist', id);
       const c = normCheck(body);
-      db.prepare('UPDATE checklist SET day=?, item=? WHERE id=?').run(c.day, c.item, Number(id));
+      await db.query('UPDATE checklist SET day=?, item=? WHERE id=?', [c.day, c.item, Number(id)]);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) { removeRow('checklist', id); return ok(res); }
+    if (M === 'DELETE' && id && !sub) { await archivar('checklist', id); return archivado(res); }
   }
 
   /* ---------- PROCESOS ---------- */
   if (ent === 'procesos') {
-    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('procesos', body.ids) });
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: await setOrder('procesos', body.ids) });
     if (M === 'POST' && !id) {
       const p = normProceso(body);
-      const r = db.prepare('INSERT INTO procesos(ord,data,url) VALUES(?,?,?)')
-        .run(nextOrd('procesos'), JSON.stringify(p), p.vids[0]?.url || '');
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO procesos(ord,data,url) VALUES(?,?,?) RETURNING id',
+        [await nextOrd('procesos'), JSON.stringify(p), p.vids[0]?.url || '']);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     // Guardado rápido de un video suelto (1 o 2) sin abrir el editor completo.
     if (M === 'PUT' && id && sub === 'video') {
-      const row = must('procesos', id);
+      const row = await must('procesos', id);
       const data = JSON.parse(row.data);
       const vids = procVids(data, row.url);
       const n = Number(body.n) === 2 ? 1 : 0;
@@ -918,188 +1064,157 @@ async function api(request, res, path) {
       const next = { url, nota: text(body.nota, 400) };
       if (n < vids.length) vids[n] = next; else vids.push(next);
       data.vids = trimVids(vids);
-      db.prepare('UPDATE procesos SET data=?, url=? WHERE id=?')
-        .run(JSON.stringify(data), data.vids[0]?.url || '', Number(id));
+      await db.query('UPDATE procesos SET data=?, url=? WHERE id=?',
+        [JSON.stringify(data), data.vids[0]?.url || '', Number(id)]);
       if (old && old !== url) await gcUpload(old);
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      const row = must('procesos', id);
+      const row = await must('procesos', id);
       const antes = procVids(JSON.parse(row.data), row.url).map((v) => v.url);
       const p = normProceso(body);
-      db.prepare('UPDATE procesos SET data=?, url=? WHERE id=?')
-        .run(JSON.stringify(p), p.vids[0]?.url || '', Number(id));
+      await db.query('UPDATE procesos SET data=?, url=? WHERE id=?',
+        [JSON.stringify(p), p.vids[0]?.url || '', Number(id)]);
       for (const u of antes) await gcUpload(u);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) {
-      const row = must('procesos', id);
-      const antes = procVids(JSON.parse(row.data), row.url).map((v) => v.url);
-      removeRow('procesos', id);
-      for (const u of antes) await gcUpload(u);
-      return ok(res);
-    }
+    if (M === 'DELETE' && id && !sub) { await archivar('procesos', id); return archivado(res); }
   }
 
   /* ---------- PRODUCTOS + MEDIA ---------- */
   if (ent === 'products') {
-    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('products', body.ids, true) });
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: await setOrder('products', body.ids, true) });
     if (M === 'POST' && !id) {
       const p = normProducto(body);
-      const newId = freeId(slug(p.name));
-      db.prepare('INSERT INTO products(id,ord,data) VALUES(?,?,?)').run(newId, nextOrd('products'), JSON.stringify(p));
+      const newId = await freeId(slug(p.name));
+      await db.query('INSERT INTO products(id,ord,data) VALUES(?,?,?)', [newId, await nextOrd('products'), JSON.stringify(p)]);
       return json(res, 201, { id: newId });
     }
     if (M === 'GET' && id && sub === 'zip') return zipProducto(res, id);
     if (M === 'POST' && id && sub === 'media') {
-      must('products', id);
+      await must('products', id);
       const url = urlOrFail(body.url);
       if (!url) throw new HttpError(400, 'Link inválido');
       const kind = body.kind === 'video' ? 'video' : 'image';
-      const ord = db.prepare('SELECT COALESCE(MAX(ord),-1)+1 n FROM media WHERE product_id=?').get(id).n;
-      const r = db.prepare('INSERT INTO media(product_id,kind,title,url,nota,ord) VALUES(?,?,?,?,?,?)')
-        .run(id, kind, str(body.title, 120) || (kind === 'video' ? 'Video' : 'Imagen'), url, text(body.nota, 400), ord);
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const ord = Number((await uno('SELECT COALESCE(MAX(ord),-1)+1 AS n FROM media WHERE product_id=?', [id])).n);
+      const r = await db.query('INSERT INTO media(product_id,kind,title,url,nota,ord) VALUES(?,?,?,?,?,?) RETURNING id',
+        [id, kind, str(body.title, 120) || (kind === 'video' ? 'Video' : 'Imagen'), url, text(body.nota, 400), ord]);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && sub === 'media' && seg[3] === 'order') {
-      must('products', id);
+      await must('products', id);
       const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number);
       if (!ids.length) throw new HttpError(400, 'Orden vacío');
-      const up = db.prepare('UPDATE media SET ord=? WHERE id=? AND product_id=?');
-      ids.forEach((mid, i) => up.run(i, mid, id));
+      for (let i = 0; i < ids.length; i++) {
+        await db.query('UPDATE media SET ord=? WHERE id=? AND product_id=?', [i, ids[i], id]);
+      }
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      const antes = JSON.parse(must('products', id).data).difUrl;
-      db.prepare('UPDATE products SET data=? WHERE id=?').run(JSON.stringify(normProducto(body)), id);
+      const antes = JSON.parse((await must('products', id)).data).difUrl;
+      await db.query('UPDATE products SET data=? WHERE id=?', [JSON.stringify(normProducto(body)), id]);
       await gcUpload(antes);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) {
-      must('products', id);
-      const urls = db.prepare('SELECT url FROM media WHERE product_id=?').all(id).map((m) => m.url);
-      db.prepare('DELETE FROM media WHERE product_id=?').run(id);
-      db.prepare('DELETE FROM products WHERE id=?').run(id);
-      for (const u of urls) await gcUpload(u);
-      return ok(res);
-    }
+    if (M === 'DELETE' && id && !sub) { await archivar('products', id); return archivado(res); }
   }
 
   if (ent === 'media' && id) {
     if (M === 'PUT' && !sub) {
-      const row = must('media', id);
-      db.prepare('UPDATE media SET title=?, nota=? WHERE id=?')
-        .run(str(body.title, 120) || (row.kind === 'video' ? 'Video' : 'Imagen'), text(body.nota, 400), Number(id));
+      const row = await must('media', id);
+      await db.query('UPDATE media SET title=?, nota=? WHERE id=?',
+        [str(body.title, 120) || (row.kind === 'video' ? 'Video' : 'Imagen'), text(body.nota, 400), Number(id)]);
       return ok(res);
     }
-    if (M === 'DELETE' && !sub) {
-      const row = must('media', id);
-      db.prepare('DELETE FROM media WHERE id=?').run(Number(id));
-      await gcUpload(row.url);
-      return ok(res);
-    }
+    if (M === 'DELETE' && !sub) { await archivar('media', id); return archivado(res); }
   }
 
   /* ---------- EJEMPLOS REALES ---------- */
   if (ent === 'ejemplos') {
-    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('ejemplos', body.ids) });
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: await setOrder('ejemplos', body.ids) });
     if (M === 'POST' && !id) {
-      const r = db.prepare('INSERT INTO ejemplos(ord,data) VALUES(?,?)').run(nextOrd('ejemplos'), JSON.stringify(normEjemplo(body)));
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO ejemplos(ord,data) VALUES(?,?) RETURNING id',
+        [await nextOrd('ejemplos'), JSON.stringify(normEjemplo(body))]);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     // Capturas de conversación y audios de la llamada.
     if (M === 'POST' && id && sub === 'attach') {
-      must('ejemplos', id);
+      await must('ejemplos', id);
       const kind = oneOf(body.kind, ['image', 'audio'], 'image');
       const url = urlOrFail(body.url);
       if (!url) throw new HttpError(400, 'Falta el archivo o el link');
-      const r = db.prepare('INSERT INTO attach(owner,owner_id,kind,title,url,ord) VALUES(?,?,?,?,?,?)')
-        .run('ejemplo', String(id), kind, str(body.title, 120) || (kind === 'audio' ? 'Audio' : 'Captura'), url, nextOrd('attach'));
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO attach(owner,owner_id,kind,title,url,ord) VALUES(?,?,?,?,?,?) RETURNING id',
+        ['ejemplo', String(id), kind, str(body.title, 120) || (kind === 'audio' ? 'Audio' : 'Captura'), url, await nextOrd('attach')]);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && !sub) {
-      must('ejemplos', id);
-      db.prepare('UPDATE ejemplos SET data=? WHERE id=?').run(JSON.stringify(normEjemplo(body)), Number(id));
+      await must('ejemplos', id);
+      await db.query('UPDATE ejemplos SET data=? WHERE id=?', [JSON.stringify(normEjemplo(body)), Number(id)]);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) {
-      must('ejemplos', id);
-      const urls = db.prepare('SELECT url FROM attach WHERE owner=? AND owner_id=?').all('ejemplo', String(id)).map((a) => a.url);
-      db.prepare('DELETE FROM attach WHERE owner=? AND owner_id=?').run('ejemplo', String(id));
-      removeRow('ejemplos', id);
-      for (const u of urls) await gcUpload(u);
-      return ok(res);
-    }
+    if (M === 'DELETE' && id && !sub) { await archivar('ejemplos', id); return archivado(res); }
   }
 
-  if (ent === 'attach' && M === 'DELETE' && id) {
-    const row = must('attach', id);
-    db.prepare('DELETE FROM attach WHERE id=?').run(Number(id));
-    await gcUpload(row.url);
-    return ok(res);
-  }
+  if (ent === 'attach' && M === 'DELETE' && id) { await archivar('attach', id); return archivado(res); }
 
   /* ---------- GUIONES POR CASO ---------- */
   if (ent === 'guiones') {
-    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('guiones', body.ids) });
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: await setOrder('guiones', body.ids) });
     if (M === 'POST' && !id) {
-      const r = db.prepare('INSERT INTO guiones(ord,data) VALUES(?,?)').run(nextOrd('guiones'), JSON.stringify(normGuion(body)));
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO guiones(ord,data) VALUES(?,?) RETURNING id',
+        [await nextOrd('guiones'), JSON.stringify(normGuion(body))]);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && !sub) {
-      must('guiones', id);
-      db.prepare('UPDATE guiones SET data=? WHERE id=?').run(JSON.stringify(normGuion(body)), Number(id));
+      await must('guiones', id);
+      await db.query('UPDATE guiones SET data=? WHERE id=?', [JSON.stringify(normGuion(body)), Number(id)]);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) { removeRow('guiones', id); return ok(res); }
+    if (M === 'DELETE' && id && !sub) { await archivar('guiones', id); return archivado(res); }
   }
 
   /* ---------- INFORMACIÓN DEL NEGOCIO ---------- */
   if (ent === 'infos') {
-    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('infos', body.ids) });
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: await setOrder('infos', body.ids) });
     if (M === 'POST' && !id) {
-      const r = db.prepare('INSERT INTO infos(ord,data) VALUES(?,?)').run(nextOrd('infos'), JSON.stringify(normInfo(body)));
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO infos(ord,data) VALUES(?,?) RETURNING id',
+        [await nextOrd('infos'), JSON.stringify(normInfo(body))]);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && !sub) {
-      must('infos', id);
-      db.prepare('UPDATE infos SET data=? WHERE id=?').run(JSON.stringify(normInfo(body)), Number(id));
+      await must('infos', id);
+      await db.query('UPDATE infos SET data=? WHERE id=?', [JSON.stringify(normInfo(body)), Number(id)]);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) { removeRow('infos', id); return ok(res); }
+    if (M === 'DELETE' && id && !sub) { await archivar('infos', id); return archivado(res); }
   }
 
   /* ---------- SOPORTE: DUDAS DE LA ASESORA ---------- */
   if (ent === 'dudas') {
     if (M === 'POST' && !id) {
-      const r = db.prepare('INSERT INTO dudas(created,autor,texto,url,estado,respuesta) VALUES(?,?,?,?,?,?)')
-        .run(new Date().toISOString(), str(body.autor, 60) || 'Vendedora', req(body.texto, 1500, 'la duda'), urlOrFail(body.url), 'abierta', '');
-      return json(res, 201, { id: Number(r.lastInsertRowid) });
+      const r = await db.query('INSERT INTO dudas(created,autor,texto,url,estado,respuesta) VALUES(?,?,?,?,?,?) RETURNING id',
+        [new Date().toISOString(), str(body.autor, 60) || 'Vendedora', req(body.texto, 1500, 'la duda'), urlOrFail(body.url), 'abierta', '']);
+      return json(res, 201, { id: Number(r.rows[0].id) });
     }
     if (M === 'PUT' && id && sub === 'estado') {
-      must('dudas', id);
-      db.prepare('UPDATE dudas SET estado=? WHERE id=?').run(oneOf(body.estado, ['abierta', 'resuelta'], 'abierta'), Number(id));
+      await must('dudas', id);
+      await db.query('UPDATE dudas SET estado=? WHERE id=?', [oneOf(body.estado, ['abierta', 'resuelta'], 'abierta'), Number(id)]);
       return ok(res);
     }
     if (M === 'PUT' && id && sub === 'respuesta') {
-      must('dudas', id);
+      await must('dudas', id);
       const resp = text(body.respuesta, 1500);
-      db.prepare('UPDATE dudas SET respuesta=?, estado=? WHERE id=?')
-        .run(resp, resp ? 'resuelta' : 'abierta', Number(id));
+      await db.query('UPDATE dudas SET respuesta=?, estado=? WHERE id=?',
+        [resp, resp ? 'resuelta' : 'abierta', Number(id)]);
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      must('dudas', id);
-      db.prepare('UPDATE dudas SET autor=?, texto=?, url=? WHERE id=?')
-        .run(str(body.autor, 60) || 'Vendedora', req(body.texto, 1500, 'la duda'), urlOrFail(body.url), Number(id));
+      await must('dudas', id);
+      await db.query('UPDATE dudas SET autor=?, texto=?, url=? WHERE id=?',
+        [str(body.autor, 60) || 'Vendedora', req(body.texto, 1500, 'la duda'), urlOrFail(body.url), Number(id)]);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) {
-      const row = must('dudas', id);
-      removeRow('dudas', id);
-      await gcUpload(row.url);
-      return ok(res);
-    }
+    if (M === 'DELETE' && id && !sub) { await archivar('dudas', id); return archivado(res); }
   }
 
   throw new HttpError(404, 'No encontrado');
@@ -1109,12 +1224,13 @@ const server = createServer(async (request, res) => {
   const path = decodeURIComponent(new URL(request.url, 'http://x').pathname);
   try {
     // /health también sirve para diagnosticar: si "arrancado" cambia a cada rato,
-    // el contenedor se está reiniciando y con un volumen mal montado eso borra la base.
+    // el contenedor se está reiniciando solo.
     if (path === '/health') {
       return json(res, 200, {
         ok: true,
         version: VERSION,
-        baseCreada: meta('creada') || null,
+        motor: MOTOR,
+        baseCreada: await meta('creada') || null,
         arrancado: ARRANQUE,
         segundosEnPie: Math.round(process.uptime()),
         requireData: REQUIRE_DATA,
@@ -1124,16 +1240,17 @@ const server = createServer(async (request, res) => {
     if (path.startsWith('/api/')) return await api(request, res, path);
     if (request.method !== 'GET' && request.method !== 'HEAD') return json(res, 405, { error: 'Método no permitido' });
 
-    // Archivos subidos por el equipo (viven en el volumen persistente, junto a la base).
+    // Archivos subidos por el equipo (en Postgres viven dentro de la base).
     if (path.startsWith('/uploads/')) {
       const name = basename(normalize(path));
       if (!/^[\w.-]+$/.test(name)) return json(res, 403, { error: 'Prohibido' });
-      const buf = await readFile(join(UPLOADS, name));
+      const f = await db.files.get(name);
+      if (!f) return json(res, 404, { error: 'No encontrado' });
       res.writeHead(200, {
-        'content-type': MIME_BY_EXT[extname(name)] || 'application/octet-stream',
+        'content-type': f.mime || 'application/octet-stream',
         'cache-control': 'public, max-age=31536000, immutable',
       });
-      return res.end(request.method === 'HEAD' ? undefined : buf);
+      return res.end(request.method === 'HEAD' ? undefined : f.data);
     }
 
     const rel = normalize(path === '/' ? '/index.html' : path).replace(/^([/\\.]+)/, '');
@@ -1153,23 +1270,22 @@ const server = createServer(async (request, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`NOVA Onboarding ${VERSION} en http://0.0.0.0:${PORT} · datos en ${DATA_DIR}`);
-  if (BASE_NUEVA) {
-    console.warn('[AVISO] No había base de datos en ' + DB_FILE + ': se ha creado una nueva con el contenido inicial.');
-    console.warn('[AVISO] Si esperabas encontrar el contenido del equipo, el volumen persistente no está montado en ' + DATA_DIR + '.');
-    console.warn('[AVISO] Cuando la app ya tenga contenido real, pon REQUIRE_DATA=1 para que no vuelva a arrancar vacía.');
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log(`NOVA Onboarding ${VERSION} en http://0.0.0.0:${PORT} · motor: ${MOTOR}${MOTOR === 'sqlite' ? ` · datos en ${DATA_DIR}` : ` · base ${PG_CFG.database || '(url)'}`}`);
+  if (MOTOR === 'postgres') {
+    console.log('El contenido y los archivos viven en PostgreSQL: los despliegues no tocan los datos.');
+  } else if (BASE_NUEVA) {
+    console.warn('[AVISO] No había base de datos: se ha creado una nueva VACÍA (esta app no trae contenido de ejemplo).');
   } else {
-    console.log(`Base existente reutilizada (creada ${meta('creada') || '¿?'}), no se toca el contenido guardado.`);
+    console.log(`Base existente reutilizada (creada ${await meta('creada') || '¿?'}), no se toca el contenido guardado.`);
   }
-  if (!REQUIRE_DATA) console.warn('[AVISO] REQUIRE_DATA no está activado: si el volumen desaparece, la app arrancaría vacía sin avisar.');
-  console.log('Contenido actual: ' + TABLAS.map((t) => `${t}=${count(t)}`).join(' '));
-  const snap = snapshot('arranque');
+  console.log('Contenido actual: ' + (await Promise.all(TABLAS.map(async (t) => `${t}=${await count(t)}`))).join(' '));
+  const snap = await snapshot('arranque');
   if (snap) console.log(`Instantánea de seguridad guardada: ${join(BACKUPS, snap)}`);
   // Una instantánea al día mientras el proceso siga vivo.
-  setInterval(() => snapshot('diaria'), 24 * 60 * 60 * 1000).unref();
+  setInterval(() => { snapshot('diaria'); }, 24 * 60 * 60 * 1000).unref();
 });
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
-  process.on(sig, () => server.close(() => { db.close(); process.exit(0); }));
+  process.on(sig, () => server.close(() => { Promise.resolve(db.close()).finally(() => process.exit(0)); }));
 }

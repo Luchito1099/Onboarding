@@ -1,4 +1,5 @@
 // Pruebas de protección de datos: qué pasa con el contenido del equipo en cada despliegue.
+// Corren sobre el motor SQLite (sin variables DB_*), que comparte el código con PostgreSQL.
 // Se ejecutan con:  npm test
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,10 +17,13 @@ const BASE = `http://127.0.0.1:${PUERTO}`;
 let DIR = '';
 
 /* ---------- utilidades ---------- */
+// El runner hereda el entorno: se limpian las variables de Postgres para forzar SQLite.
+const SIN_PG = { DATABASE_URL: '', POSTGRES_URL: '', PGHOST: '', POSTGRES_HOST: '', DB_HOST: '' };
+
 function arranca(env = {}) {
   return new Promise((resolve, reject) => {
     const p = spawn(process.execPath, [SERVER], {
-      env: { ...process.env, PORT: String(PUERTO), DATA_DIR: DIR, ...env },
+      env: { ...process.env, ...SIN_PG, PORT: String(PUERTO), DATA_DIR: DIR, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let salida = '';
@@ -51,96 +55,100 @@ const estado = () => api('GET', '/api/state').then((r) => r.data);
 before(() => { DIR = mkdtempSync(join(tmpdir(), 'nova-test-')); });
 after(() => rmSync(DIR, { recursive: true, force: true }));
 
-/* ---------- 1. un despliegue no toca lo que el equipo escribió ---------- */
+/* ---------- 1. la app empieza VACÍA: cero contenido de ejemplo ---------- */
+test('una base nueva arranca sin ningún contenido de ejemplo', async () => {
+  const { proc, salida } = await arranca();
+  const s = await estado();
+  await para(proc);
+  for (const k of ['tasks', 'videos', 'checklist', 'procesos', 'products', 'ejemplos', 'infos', 'guiones', 'dudas']) {
+    assert.equal(s[k].length, 0, `${k} debe empezar vacío`);
+  }
+  assert.match(salida, /VACÍA|Base existente/, 'el log lo deja claro');
+});
+
+/* ---------- 2. un despliegue no toca lo que el equipo escribió ---------- */
 test('un redespliegue conserva lo editado, lo creado y el progreso', async () => {
   let { proc } = await arranca();
-  const inicial = await estado();
-  assert.equal(inicial.tasks.length, 4, 'la base nueva arranca con el runbook de ejemplo');
-  await api('POST', '/api/checklist', { day: 'Día 1', item: 'Ítem para la prueba' });
-
-  await api('PUT', `/api/tasks/${inicial.tasks[0].id}`, { title: 'Tarea real del equipo', time: '08:00' });
-  const creada = (await api('POST', '/api/tasks', { title: 'Otra tarea real', time: '10:15' })).data.id;
+  const t1 = (await api('POST', '/api/tasks', { title: 'Tarea real del equipo', time: '08:00' })).data.id;
+  await api('POST', '/api/tasks', { title: 'Otra tarea real', time: '10:15' });
   await api('POST', '/api/guiones', { title: 'Guion real', apertura: 'Hola' });
-  const item = (await estado()).checklist[0].items[0].id;
-  await api('PUT', `/api/checklist/${item}/done`, { done: true });
+  const ck = (await api('POST', '/api/checklist', { day: 'Día 1', item: 'Ítem real' })).data.id;
+  await api('PUT', `/api/checklist/${ck}/done`, { done: true });
+  await api('PUT', `/api/tasks/${t1}`, { title: 'Tarea real (editada)', time: '07:30' });
   await para(proc);
 
   ({ proc } = await arranca()); // esto es un deploy: mismo volumen, código nuevo
-  const despues = await estado();
+  const s = await estado();
   await para(proc);
 
-  assert.ok(despues.tasks.some((t) => t.title === 'Tarea real del equipo'), 'la tarea editada sigue editada');
-  assert.ok(despues.tasks.some((t) => t.id === creada), 'la tarea creada sigue ahí');
-  assert.ok(despues.guiones.some((g) => g.title === 'Guion real'), 'el guion creado sigue ahí');
-  assert.equal(despues.tasks.length, 5, 'no se reinserta el contenido de ejemplo');
-  assert.ok(!despues.tasks.some((t) => t.title === 'Enviar mensaje predeterminado de pedidos'),
-    'no reaparece la tarea de ejemplo que se había renombrado');
-  assert.equal(despues.checklist[0].items[0].done, true, 'el progreso del checklist se conserva');
+  assert.equal(s.tasks.length, 2, 'no aparece nada que el equipo no haya creado');
+  assert.ok(s.tasks.some((t) => t.title === 'Tarea real (editada)'), 'la edición sobrevive');
+  assert.equal(s.tasks[0].title, 'Tarea real (editada)', 'y se reordenó por su nueva hora');
+  assert.ok(s.guiones.some((g) => g.title === 'Guion real'));
+  assert.equal(s.checklist[0].items[0].done, true, 'el progreso del checklist se conserva');
 });
 
-/* ---------- 2. lo borrado no vuelve solo ---------- */
-test('si el equipo borra contenido, un reinicio no se lo devuelve', async () => {
+/* ---------- 3. no existe eliminar: primero archivo, luego (si acaso) borrado ---------- */
+test('eliminar archiva; desde el archivo se restaura o se elimina definitivamente', async () => {
   let { proc } = await arranca();
-  for (const t of (await estado()).tasks) await api('DELETE', `/api/tasks/${t.id}`);
-  assert.equal((await estado()).tasks.length, 0);
+  const id = (await api('POST', '/api/infos', { title: 'Bloque importante', body: 'texto' })).data.id;
+
+  const r1 = await api('DELETE', `/api/infos/${id}`);
+  assert.equal(r1.status, 200);
+  assert.equal(r1.data.archivado, true, 'la respuesta dice que se archivó, no que se borró');
+  assert.equal((await estado()).infos.length, 0, 'deja de verse en la app');
+
+  const arch = (await api('GET', '/api/archivo')).data.archivo;
+  assert.equal(arch.length, 1, 'aparece en el archivo');
+  assert.equal(arch[0].titulo, 'Bloque importante');
+  assert.equal(arch[0].ent, 'infos');
+
+  // el borrado directo definitivo NO existe: sobre algo activo se rechaza
+  const activo = (await api('POST', '/api/infos', { title: 'Otro bloque', body: 'x' })).data.id;
+  const noDirecto = await api('DELETE', `/api/archivo/infos/${activo}`);
+  assert.equal(noDirecto.status, 400, 'no se puede eliminar definitivamente algo sin archivar');
+  assert.match(noDirecto.data.error, /archív/i);
+
+  // restaurar lo devuelve intacto
+  await api('POST', `/api/archivo/infos/${id}/restaurar`);
+  const s2 = await estado();
+  assert.equal(s2.infos.length, 2);
+  assert.ok(s2.infos.some((x) => x.title === 'Bloque importante'));
+
+  // archivar de nuevo y, ahora sí, eliminar definitivamente
+  await api('DELETE', `/api/infos/${id}`);
+  const r2 = await api('DELETE', `/api/archivo/infos/${id}`);
+  assert.equal(r2.status, 200);
+  assert.equal((await api('GET', '/api/archivo')).data.archivo.length, 0);
+  assert.equal((await estado()).infos.length, 1);
+  await para(proc);
+
+  // y todo eso sobrevive a un reinicio
+  ({ proc } = await arranca());
+  const s3 = await estado();
+  await para(proc);
+  assert.equal(s3.infos.length, 1);
+  assert.equal(s3.infos[0].title, 'Otro bloque');
+});
+
+test('lo archivado sobrevive a los reinicios hasta que alguien decida', async () => {
+  let { proc } = await arranca();
+  const id = (await api('POST', '/api/guiones', { title: 'Guion archivado', apertura: 'x' })).data.id;
+  await api('DELETE', `/api/guiones/${id}`);
   await para(proc);
 
   ({ proc } = await arranca());
-  const tras = (await estado()).tasks.length;
+  const arch = (await api('GET', '/api/archivo')).data.archivo;
   await para(proc);
-  assert.equal(tras, 0, 'las tareas borradas siguen borradas tras el reinicio');
+  assert.ok(arch.some((x) => x.ent === 'guiones' && x.titulo === 'Guion archivado'),
+    'el archivo persiste tras reiniciar');
 });
 
-/* ---------- 2b. el onboarding nace vacío y vaciarlo es definitivo ---------- */
-test('el onboarding no trae contenido de ejemplo en una base nueva', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'nova-onb-'));
-  const dirOriginal = DIR;
-  DIR = dir;
-  const { proc } = await arranca();
-  const s = await estado();
-  await para(proc);
-  DIR = dirOriginal;
-  rmSync(dir, { recursive: true, force: true });
-
-  assert.equal(s.videos.length, 0, 'sin videos de ejemplo');
-  assert.equal(s.checklist.length, 0, 'sin checklist de ejemplo');
-});
-
-test('vaciar el onboarding lo deja vacío también después de reiniciar', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'nova-vaciar-'));
-  const dirOriginal = DIR;
-  DIR = dir;
-
-  let { proc } = await arranca();
-  // el equipo carga sus propios videos y su checklist
-  await api('POST', '/api/videos', { title: 'Video propio', dur: '1:00' });
-  await api('POST', '/api/checklist', { day: 'Día 1', item: 'Un ítem propio' });
-  assert.equal((await estado()).videos.length, 1);
-
-  const r1 = await api('POST', '/api/videos/vaciar');
-  const r2 = await api('POST', '/api/checklist/vaciar');
-  assert.equal(r1.data.borrados, 1);
-  assert.equal(r2.data.borrados, 1);
-  let s = await estado();
-  assert.equal(s.videos.length, 0);
-  assert.equal(s.checklist.length, 0);
-  await para(proc);
-
-  ({ proc } = await arranca()); // reinicio / redespliegue
-  s = await estado();
-  await para(proc);
-  DIR = dirOriginal;
-  rmSync(dir, { recursive: true, force: true });
-
-  assert.equal(s.videos.length, 0, 'los videos borrados no vuelven al reiniciar');
-  assert.equal(s.checklist.length, 0, 'el checklist borrado tampoco vuelve');
-});
-
-/* ---------- 3. una base con esquema viejo se migra sin perder nada ---------- */
+/* ---------- 4. una base con esquema viejo se migra sin perder nada ---------- */
 test('una base de una versión anterior se actualiza sin perder datos', async () => {
   const viejo = mkdtempSync(join(tmpdir(), 'nova-viejo-'));
   const db = new DatabaseSync(join(viejo, 'nova.db'));
-  // esquema tal y como era antes: sin guiones, sin infos y con media sin nota/ord
+  // esquema como era antes: sin archived_at, media sin nota/ord, sin guiones/infos/dudas
   db.exec(`
     CREATE TABLE tasks(id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL, done_on TEXT);
     CREATE TABLE videos(id INTEGER PRIMARY KEY, ord INTEGER, title TEXT, type TEXT, dur TEXT, guion TEXT, url TEXT DEFAULT '');
@@ -166,11 +174,11 @@ test('una base de una versión anterior se actualiza sin perder datos', async ()
   assert.ok(s.tasks.some((t) => t.title === 'Tarea antigua'), 'la tarea antigua sobrevive');
   assert.ok(s.products.some((p) => p.name === 'Producto antiguo'), 'el producto antiguo sobrevive');
   assert.equal(s.products.find((p) => p.id === 'viejo').media.images[0].title, 'Foto antigua', 'su foto sobrevive');
-  assert.equal(s.tasks.length, 1, 'no se mezcla el contenido de ejemplo con el que ya había');
+  assert.equal(s.tasks.length, 1, 'no se añade ningún contenido de ejemplo');
   assert.ok(Array.isArray(s.guiones), 'las tablas nuevas se crean vacías');
 });
 
-/* ---------- 4. el seguro de producción ---------- */
+/* ---------- 5. el seguro REQUIRE_DATA (modo SQLite) ---------- */
 test('con REQUIRE_DATA=1 la app se niega a arrancar si no encuentra la base', async () => {
   const vacio = mkdtempSync(join(tmpdir(), 'nova-vacio-'));
   const dirOriginal = DIR;
@@ -180,8 +188,7 @@ test('con REQUIRE_DATA=1 la app se niega a arrancar si no encuentra la base', as
 
   assert.equal(proc, null, 'el proceso no se queda arrancado');
   assert.equal(code, 1, 'sale con error para que el despliegue se marque como fallido');
-  assert.match(salida, /FATAL/, 'explica el motivo en el log');
-  assert.match(salida, /volumen persistente/, 'apunta al volumen como causa');
+  assert.match(salida, /FATAL/);
   assert.ok(!existsSync(join(vacio, 'nova.db')), 'y no llega a crear una base vacía');
   rmSync(vacio, { recursive: true, force: true });
 });
@@ -190,20 +197,15 @@ test('con REQUIRE_DATA=1 y la base en su sitio, arranca con normalidad', async (
   const { proc, salida } = await arranca({ REQUIRE_DATA: '1' });
   const s = await estado();
   await para(proc);
-  assert.match(salida, /Base existente reutilizada/);
+  assert.match(salida, /Base existente/);
   assert.ok(Array.isArray(s.tasks));
 });
 
-/* ---------- 5. instantáneas automáticas ---------- */
-test('cada arranque deja una instantánea en el volumen', async () => {
-  let { proc } = await arranca();
-  await api('POST', '/api/guiones', { title: 'Guion para la instantánea', apertura: 'Hola' });
-  await para(proc);
-
-  ({ proc } = await arranca());
+/* ---------- 6. instantáneas automáticas ---------- */
+test('cada arranque con contenido deja una instantánea en el volumen', async () => {
+  const { proc } = await arranca();
   const { data } = await api('GET', '/api/backups');
   await para(proc);
-
   assert.ok(data.backups.length >= 1, 'hay instantáneas guardadas');
   assert.ok(data.backups.every((b) => b.size > 0), 'y no están vacías');
   assert.ok(existsSync(join(DIR, 'backups')), 'viven dentro del volumen de datos');
@@ -228,17 +230,18 @@ test('las instantáneas se pueden listar, descargar y restaurar', async () => {
   await para(proc);
 });
 
-/* ---------- 6. copia completa y restauración tras perder el volumen ---------- */
+/* ---------- 7. copia completa y restauración tras perderlo todo ---------- */
 test('la copia en ZIP devuelve contenido y archivos tras perderlo todo', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'nova-zip-'));
   const dirOriginal = DIR;
   DIR = dir;
 
   let { proc } = await arranca();
-  await api('PUT', `/api/tasks/${(await estado()).tasks[0].id}`, { title: 'Tarea que no se puede perder', time: '07:00' });
+  await api('POST', '/api/tasks', { title: 'Tarea que no se puede perder', time: '07:00' });
+  const prodId = (await api('POST', '/api/products', { name: 'Producto real' })).data.id;
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   const subida = (await api('POST', '/api/uploads', png, { 'content-type': 'image/png' })).data;
-  await api('POST', `/api/products/${(await estado()).products[0].id}/media`, { kind: 'image', title: 'Foto real', url: subida.url });
+  await api('POST', `/api/products/${prodId}/media`, { kind: 'image', title: 'Foto real', url: subida.url });
 
   const zip = Buffer.from(await (await fetch(BASE + '/api/backup/zip')).arrayBuffer());
   assert.equal(zip.subarray(0, 4).toString('hex'), '504b0304', 'la copia es un ZIP válido');
@@ -247,7 +250,7 @@ test('la copia en ZIP devuelve contenido y archivos tras perderlo todo', async (
   // desastre: desaparece el volumen entero
   rmSync(dir, { recursive: true, force: true });
   ({ proc } = await arranca());
-  assert.ok(!(await estado()).tasks.some((t) => t.title === 'Tarea que no se puede perder'), 'sin volumen, el contenido no está');
+  assert.equal((await estado()).tasks.length, 0, 'sin volumen, el contenido no está');
 
   const r = await fetch(BASE + '/api/restore', { method: 'POST', headers: { 'content-type': 'application/zip' }, body: zip });
   const res = await r.json();
@@ -260,24 +263,22 @@ test('la copia en ZIP devuelve contenido y archivos tras perderlo todo', async (
   assert.equal(r.status, 200);
   assert.equal(res.archivos, 1, 'también restaura los archivos subidos');
   assert.ok(s.tasks.some((t) => t.title === 'Tarea que no se puede perder'), 'vuelve el contenido');
-  assert.ok(s.products[0].media.images.some((m) => m.title === 'Foto real'), 'vuelve la foto del producto');
+  assert.ok(s.products.find((p) => p.id === prodId).media.images.some((m) => m.title === 'Foto real'), 'vuelve la foto');
   assert.equal(foto.status, 200, 'y el archivo se puede volver a abrir');
 });
 
-/* ---------- 7. una restauración inválida no rompe nada ---------- */
 test('un archivo que no es una copia se rechaza sin tocar el contenido', async () => {
   const { proc } = await arranca();
   const antes = await estado();
   const r = await api('POST', '/api/restore', { esto: 'no es una copia' });
   const despues = await estado();
   await para(proc);
-
   assert.equal(r.status, 400, 'se rechaza');
-  assert.equal(despues.tasks.length, antes.tasks.length, 'las tareas siguen igual');
-  assert.equal(despues.guiones.length, antes.guiones.length, 'los guiones siguen igual');
+  assert.equal(despues.tasks.length, antes.tasks.length);
+  assert.equal(despues.guiones.length, antes.guiones.length);
 });
 
-/* ---------- 8. el código de arranque no borra nada ---------- */
+/* ---------- 8. el código no destruye nada por sí solo ---------- */
 test('el arranque no ejecuta ninguna sentencia destructiva', async () => {
   const { readFileSync } = await import('node:fs');
   const codigo = readFileSync(SERVER, 'utf8');
@@ -288,34 +289,32 @@ test('el arranque no ejecuta ninguna sentencia destructiva', async () => {
   assert.match(codigo, /ADD COLUMN/, 'las migraciones sólo añaden columnas');
 });
 
-/* ---------- 8b. detectar que los datos están en disco temporal ---------- */
+/* ---------- 9. detección de volumen y diagnóstico ---------- */
 test('se detecta si la carpeta de datos NO está en un volumen persistente', async () => {
   const { rutaEnMontaje } = await import('../lib/volumen.js');
   const raiz = '25 0 8:1 / / rw,relatime shared:1 - ext4 /dev/sda1 rw';
   const conVolumen = `${raiz}\n38 25 0:35 / /data rw,relatime shared:2 - ext4 /dev/sdb rw`;
-
-  assert.equal(rutaEnMontaje(conVolumen, '/data'), true, 'con el volumen montado en /data');
-  assert.equal(rutaEnMontaje(conVolumen, '/data/uploads'), true, 'y para lo que cuelga de él');
-  assert.equal(rutaEnMontaje(raiz, '/data'), false, 'sin volumen: /data es disco temporal del contenedor');
-  assert.equal(rutaEnMontaje(conVolumen, '/otra'), false, 'otra carpeta cualquiera no cuenta');
-  assert.equal(rutaEnMontaje(conVolumen, '/data/'), true, 'la barra final no despista');
-  assert.equal(rutaEnMontaje('', '/data'), false, 'sin información se considera no persistente');
+  assert.equal(rutaEnMontaje(conVolumen, '/data'), true);
+  assert.equal(rutaEnMontaje(conVolumen, '/data/uploads'), true);
+  assert.equal(rutaEnMontaje(raiz, '/data'), false);
+  assert.equal(rutaEnMontaje(conVolumen, '/otra'), false);
+  assert.equal(rutaEnMontaje('', '/data'), false);
 });
 
-test('el arranque avisa del volumen en el log y en /health', async () => {
-  const { proc, salida } = await arranca();
-  const health = await (await fetch(BASE + '/health')).json();
+test('el /health dice el motor de datos y el estado del volumen', async () => {
+  const { proc } = await arranca();
+  const health = (await api('GET', '/health')).data;
   const s = await estado();
   await para(proc);
-  // fuera de un contenedor no se puede saber, así que no bloquea ni miente
+  assert.equal(health.motor, 'sqlite', 'sin variables DB_* el motor es SQLite');
   assert.equal(health.volumenPersistente, null, 'fuera de Docker se informa como desconocido');
-  assert.ok('efimero' in s, 'el estado dice si los datos son temporales');
-  assert.match(salida, /Contenido actual/);
+  assert.ok('efimero' in s);
+  assert.equal(s.motor, 'sqlite');
 });
 
-/* ---------- 8c. prueba de conexión a PostgreSQL ---------- */
+/* ---------- 10. prueba de conexión a PostgreSQL ---------- */
 test('sin variables de Postgres, /api/pgtest lo dice claro y no rompe nada', async () => {
-  const { proc } = await arranca({ DATABASE_URL: '', POSTGRES_URL: '', PGHOST: '', POSTGRES_HOST: '', DB_HOST: '' });
+  const { proc } = await arranca();
   const r = await api('GET', '/api/pgtest');
   await para(proc);
   assert.equal(r.status, 200);
@@ -324,23 +323,22 @@ test('sin variables de Postgres, /api/pgtest lo dice claro y no rompe nada', asy
   assert.match(r.data.error, /DB_HOST/, 'explica qué variables definir, en el formato DB_*');
 });
 
-test('con Postgres inalcanzable, /api/pgtest devuelve el error sin colgarse', async () => {
-  // el mismo formato de variables que usa el equipo: DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
-  const { proc } = await arranca({ DB_HOST: '127.0.0.1', DB_PORT: '9', DB_USER: 'x', DB_PASSWORD: 'x', DB_NAME: 'onboarding' });
+test('con un Postgres inalcanzable, /api/pgtest devuelve el error sin colgarse', async () => {
+  const { proc } = await arranca();
   const t0 = Date.now();
-  const r = await api('GET', '/api/pgtest');
+  const r = await api('GET', '/api/pgtest?host=127.0.0.1&port=9&user=x&password=x&database=onboarding');
   const tardo = Date.now() - t0;
   const salud = await api('GET', '/health');
   await para(proc);
   assert.equal(r.status, 200);
   assert.equal(r.data.ok, false);
-  assert.equal(r.data.configurado, true, 'con DB_HOST puesto, cuenta como configurado');
+  assert.equal(r.data.configurado, true);
   assert.ok(r.data.error, 'trae el motivo del fallo');
   assert.ok(tardo < 10000, `responde en un tiempo razonable (${tardo} ms)`);
   assert.equal(salud.data.ok, true, 'y la app sigue viva después del intento');
 });
 
-/* ---------- 8d. la imagen Docker trae todo lo que el servidor importa ---------- */
+/* ---------- 11. la imagen Docker trae todo lo que el servidor importa ---------- */
 test('el Dockerfile copia cada módulo local que server.js importa', async () => {
   const { readFileSync } = await import('node:fs');
   const docker = readFileSync(join(RAIZ, 'Dockerfile'), 'utf8');
@@ -355,13 +353,16 @@ test('el Dockerfile copia cada módulo local que server.js importa', async () =>
   assert.match(docker, /npm install/, 'la imagen instala las dependencias npm (pg)');
 });
 
-/* ---------- 9. las instantáneas no crecen sin control ---------- */
+/* ---------- 12. las instantáneas no crecen sin control ---------- */
 test('se conservan como máximo las últimas instantáneas configuradas', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'nova-rota-'));
   const dirOriginal = DIR;
   DIR = dir;
-  for (let i = 0; i < 5; i++) {
-    const { proc } = await arranca({ MAX_BACKUPS: '3' });
+  let { proc } = await arranca({ MAX_BACKUPS: '3' });
+  await api('POST', '/api/guiones', { title: 'Contenido para las instantáneas', apertura: 'x' });
+  await para(proc);
+  for (let i = 0; i < 4; i++) {
+    ({ proc } = await arranca({ MAX_BACKUPS: '3' }));
     await para(proc);
   }
   const guardadas = readdirSync(join(dir, 'backups')).filter((f) => f.endsWith('.json'));

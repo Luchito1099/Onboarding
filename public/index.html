@@ -806,6 +806,12 @@
             <div id="bkList"></div>
             <div class="hint" id="bkInfo"></div>
           </div>
+          <div class="fcard vedit">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v4H3zM5 11v8h14v-8M10 15h4"/></svg> Archivo</h3>
+            <p class="fdesc">Aquí va todo lo que se archiva en la app. Nada se borra directo: primero se archiva, y sólo desde aquí se puede <b>restaurar</b> o <b>eliminar definitivamente</b>.</p>
+            <div class="filerow"><button class="fbtn" id="verArchivo" type="button">Ver archivo</button></div>
+            <div id="archList"></div>
+          </div>
         </section>
 
         <!-- ===== SOPORTE ===== -->
@@ -1520,9 +1526,11 @@ function openEditor(kind, item, defaults) {
     },
   });
 }
+// Nada se elimina directo: se ARCHIVA. Desde Información del negocio → Archivo
+// se puede restaurar o, ahí sí, eliminar definitivamente.
 const deleteItem = async (kind, id, name) => {
-  if (!confirm(`¿Eliminar ${name || SCHEMAS[kind].label}?\n\nEsta acción no se puede deshacer.`)) return;
-  try { await api('DELETE', `${SCHEMAS[kind].path}/${id}`); await reload(); toast('Eliminado'); }
+  if (!confirm(`¿Mover ${name || SCHEMAS[kind].label} al archivo?\n\nNo se borra nada: podrás restaurarlo o eliminarlo definitivamente desde Información del negocio → Archivo.`)) return;
+  try { await api('DELETE', `${SCHEMAS[kind].path}/${id}`); await reload(); toast('Movido al archivo'); }
   catch (err) { toast(err.message); }
 };
 
@@ -1545,7 +1553,7 @@ function ebar(kind, item, opts) {
     bar.appendChild(b);
   };
   mk('Editar', ICON.pen, () => openEditor(kind, item));
-  mk('Eliminar', ICON.trash, () => deleteItem(kind, item.id, opts.name), 'danger');
+  mk('Archivar', ICON.trash, () => deleteItem(kind, item.id, opts.name), 'danger');
   return bar;
 }
 
@@ -1574,9 +1582,9 @@ function barraMedia(it, prodId) {
     req: ['title'],
     onSave: async (vals) => { await api('PUT', `/media/${it.id}`, vals); await reload(); },
   }));
-  mk('Quitar', ICON.trash, async () => {
-    if (!confirm('¿Quitar este archivo del producto?')) return;
-    try { await api('DELETE', `/media/${it.id}`); await reload(); toast('Quitado'); }
+  mk('Archivar', ICON.trash, async () => {
+    if (!confirm('¿Mover este archivo al archivo de borrados?\n\nPodrás restaurarlo desde Información del negocio → Archivo.')) return;
+    try { await api('DELETE', `/media/${it.id}`); await reload(); toast('Movido al archivo'); }
     catch (err) { toast(err.message); }
   }, 'danger');
   return bar;
@@ -1966,7 +1974,7 @@ function openEjemplo(e) {
     };
     sh.querySelector('.del').onclick = async (ev) => {
       ev.stopPropagation();
-      if (!confirm('¿Quitar esta captura?')) return;
+      if (!confirm('¿Mover esta captura al archivo? Podrás restaurarla desde Información del negocio → Archivo.')) return;
       try {
         await api('DELETE', `/attach/${sh.dataset.id}`);
         await reload();
@@ -1993,7 +2001,7 @@ function openEjemplo(e) {
     subir(f, 'audio');
   };
   box.querySelectorAll('.arow .adel').forEach((b) => (b.onclick = async () => {
-    if (!confirm('¿Quitar este audio?')) return;
+    if (!confirm('¿Mover este audio al archivo? Podrás restaurarlo desde Información del negocio → Archivo.')) return;
     try {
       await api('DELETE', `/attach/${b.closest('.arow').dataset.id}`);
       await reload();
@@ -2309,8 +2317,8 @@ function renderInfos() {
   const mins = arranque ? Math.round((Date.now() - arranque.getTime()) / 60000) : null;
   document.getElementById('bkInfo').innerHTML =
     `Ahora mismo hay ${total} elementos guardados y ${S.dudas.length} dudas de soporte. Versión del servidor: ${esc(S.version || '—')}.<br>` +
-    `Base creada el ${S.baseCreada ? esc(fechaCorta(S.baseCreada)) : '—'} · servidor en pie desde hace ${mins === null ? '—' : mins < 60 ? `${mins} min` : `${Math.round(mins / 60)} h`}. ` +
-    'Si ese “en pie desde hace” se reinicia solo cada poco, el contenedor se está reiniciando y con el volumen mal montado eso vacía la base.';
+    `Motor de datos: <b>${S.motor === 'postgres' ? 'PostgreSQL (los despliegues no tocan los datos)' : 'SQLite'}</b> · ` +
+    `base creada el ${S.baseCreada ? esc(fechaCorta(S.baseCreada)) : '—'} · servidor en pie desde hace ${mins === null ? '—' : mins < 60 ? `${mins} min` : `${Math.round(mins / 60)} h`}.`;
   const list = document.getElementById('infoList');
   list.innerHTML = '';
   if (!S.infos.length) list.innerHTML = emptyBox('Todavía no hay información cargada. Activa “Editar” y añade el primer bloque.');
@@ -2345,6 +2353,45 @@ async function bajarCopia(ruta, nombre) {
 const hoyISO = () => (S && S.hoy) || 'copia';
 document.getElementById('bkZip').onclick = () => bajarCopia('/api/backup/zip', `nova-copia-${hoyISO()}.zip`);
 document.getElementById('bkJson').onclick = () => bajarCopia('/api/backup', `nova-copia-${hoyISO()}.json`);
+/* ================= ARCHIVO (borrado en dos pasos) ================= */
+async function renderArchivo() {
+  const caja = document.getElementById('archList');
+  let lista;
+  try { lista = (await api('GET', '/archivo')).archivo; }
+  catch (err) { return toast(err.message); }
+  caja.dataset.abierto = '1';
+  if (!lista.length) { caja.innerHTML = emptyBox('El archivo está vacío. Lo que archives aparecerá aquí.'); return; }
+  caja.innerHTML = `<div class="audios" style="margin-top:12px">${lista.map((x, i) => `
+    <div class="arow" data-i="${i}">
+      <span class="aname"><span class="hint">${esc(x.tipo)}</span><br>${esc(x.titulo || '(sin título)')}</span>
+      <span class="hint">${esc(fechaCorta(x.fecha))}</span>
+      <button class="fbtn arRest" type="button">Restaurar</button>
+      <button class="fbtn arDel" type="button" style="color:var(--crit)">Eliminar definitivamente</button>
+    </div>`).join('')}</div>`;
+  caja.querySelectorAll('.arRest').forEach((b, i) => (b.onclick = async () => {
+    try {
+      await api('POST', `/archivo/${lista[i].ent}/${lista[i].id}/restaurar`);
+      await reload();
+      await renderArchivo();
+      toast('Restaurado');
+    } catch (err) { toast(err.message); }
+  }));
+  caja.querySelectorAll('.arDel').forEach((b, i) => (b.onclick = async () => {
+    if (!confirm(`Eliminar DEFINITIVAMENTE “${lista[i].titulo}” (${lista[i].tipo}).\n\nEsto ya no se puede deshacer. ¿Seguro?`)) return;
+    try {
+      await api('DELETE', `/archivo/${lista[i].ent}/${lista[i].id}`);
+      await reload();
+      await renderArchivo();
+      toast('Eliminado definitivamente');
+    } catch (err) { toast(err.message); }
+  }));
+}
+document.getElementById('verArchivo').onclick = async () => {
+  const caja = document.getElementById('archList');
+  if (caja.dataset.abierto === '1') { caja.innerHTML = ''; caja.dataset.abierto = '0'; return; }
+  await renderArchivo();
+};
+
 // Prueba rápida de PostgreSQL: pop-up verde si conecta, rojo con el motivo si no.
 document.getElementById('pgTest').onclick = async () => {
   const btn = document.getElementById('pgTest');
@@ -2461,7 +2508,7 @@ function renderDudas() {
       catch (err) { toast(err.message); }
     });
     mk('Editar', () => openEditor('duda', d));
-    mk('Eliminar', () => deleteItem('duda', d.id, 'esta duda'));
+    mk('Archivar', () => deleteItem('duda', d.id, 'esta duda'));
     list.appendChild(node);
   });
 }
@@ -2589,7 +2636,7 @@ document.getElementById('addCheck').onclick = () => openEditor('check');
 document.getElementById('vaciarOnb').onclick = async () => {
   const n = S.videos.length + S.checklist.reduce((t, g) => t + g.items.length, 0);
   if (!n) return toast('El onboarding ya está vacío');
-  if (!confirm(`Vas a borrar ${n} elementos del onboarding (videos y checklist).\n\nNo se puede deshacer, pero queda una copia automática. ¿Seguir?`)) return;
+  if (!confirm(`Vas a mover ${n} elementos del onboarding (videos y checklist) al archivo.\n\nPodrás restaurarlos desde Información del negocio → Archivo. ¿Seguir?`)) return;
   try {
     await api('POST', '/videos/vaciar');
     await api('POST', '/checklist/vaciar');
@@ -2626,7 +2673,7 @@ const reload = async () => { S = await api('GET', '/state'); renderAll(); };
 
 // Si el servidor avisa de que sus datos son temporales, se dice bien claro y arriba del todo.
 function avisarSiEfimero() {
-  document.getElementById('avisoEfimero').style.display = S && S.efimero ? 'flex' : 'none';
+  document.getElementById('avisoEfimero').style.display = S && S.efimero && S.motor !== 'postgres' ? 'flex' : 'none';
 }
 
 /* ================= INIT ================= */

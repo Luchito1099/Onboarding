@@ -1,5 +1,5 @@
-// Contenido inicial. Sólo se inserta la primera vez (cuando la base está vacía).
-// Después, la fuente de verdad es SQLite: editar aquí no altera datos existentes.
+// ATENCIÓN: el servidor YA NO usa este archivo. La app empieza siempre vacía.
+// Se conserva únicamente como datos de ejemplo para las suites de prueba.
 
 export const TASKS = [
   {time:'08:45',block:'Apertura',range:'08:45–08:50',tag:'PEDIDOS',prio:'crit',dur:'5 min',

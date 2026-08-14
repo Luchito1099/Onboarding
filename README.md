@@ -1,7 +1,9 @@
 # NOVA Onboarding — Ventas COD
 
 App de onboarding y runbook operativo para el equipo de ventas COD.
-Node 24 sin dependencias npm + SQLite embebido (`node:sqlite`). Imagen Docker ~80 MB.
+Node 24 + **PostgreSQL** como motor de datos en producción (todo el contenido **y los archivos subidos** viven en la base: los despliegues no tocan ni un dato). Sin variables de Postgres, usa SQLite local — el modo de desarrollo y de los tests.
+
+**La app empieza vacía**: no trae ningún contenido de ejemplo. Y **nada se elimina directo**: primero se archiva, y sólo desde el Archivo se puede restaurar o eliminar definitivamente.
 
 ## Qué hace
 
@@ -128,7 +130,7 @@ Las grillas son fluidas (`auto-fill`), el arrastre usa eventos de puntero (funci
 
 Reglas que cumple la app, cubiertas por las pruebas de `npm test`:
 
-1. **Actualizar nunca borra.** El contenido de ejemplo se inserta **una sola vez en la vida de la base** (queda marcado en la tabla `meta`). Si el equipo borra todas las tareas, un reinicio **no** se las devuelve.
+1. **Actualizar nunca borra.** La app no trae contenido de ejemplo y jamás inserta nada por su cuenta: lo que hay en la base es exactamente lo que el equipo escribió.
 2. **Las migraciones sólo añaden.** Nunca hay `DROP TABLE` ni se quitan columnas: una base de una versión anterior se actualiza conservando todo.
 3. **Detección de volumen.** Dentro de un contenedor, la app comprueba si `DATA_DIR` está en un volumen montado. Si no lo está, arranca igual pero avisa fuerte: en el log, con un cartel rojo permanente dentro de la app y en `/health` (`volumenPersistente: false`) — todo lo guardado ahí se pierde en el siguiente despliegue.
 4. **`REQUIRE_DATA=1` es el segundo seguro.** Con esa variable puesta, si al arrancar no encuentra `nova.db` la app **se niega a arrancar** (sale con error, el despliegue se marca como fallido) en vez de crear una base vacía. Es la protección contra un volumen mal montado.
@@ -139,7 +141,7 @@ Reglas que cumple la app, cubiertas por las pruebas de `npm test`:
 Las instantáneas viven en el mismo volumen, así que protegen de borrados y de restauraciones equivocadas, **no** de perder el volumen. Para eso, descarga la copia (abajo) y guárdala fuera.
 
 ```bash
-npm test   # 11 pruebas de protección y respaldo
+npm test   # 18 pruebas de protección, archivo y respaldo
 ```
 
 ## Copia de seguridad (importante)
@@ -168,19 +170,31 @@ o bien, si el volumen no está montado:
 
 Actualizar la app **nunca** toca el contenido guardado: el contenido inicial sólo se inserta en tablas vacías y las migraciones sólo añaden columnas.
 
-## PostgreSQL (en preparación)
+## PostgreSQL (motor de producción)
 
-La app sigue guardando en SQLite, pero ya trae el cliente de PostgreSQL y una prueba de conexión para preparar la migración:
+Con las variables de conexión definidas, la app usa PostgreSQL para **todo**: contenido, progreso, dudas y también los archivos subidos (en la tabla `nova_files`). Un despliegue crea un contenedor nuevo, pero los datos están en la base — se puede desplegar 20 veces sin perder nada.
 
-1. En Coolify, define las variables de conexión. Se aceptan tres formatos, en este orden de preferencia:
+1. Variables (cualquiera de los tres formatos):
    - `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` (el formato del equipo),
    - `DATABASE_URL` = `postgres://usuario:clave@host:5432/base`,
    - o el juego estándar `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`.
    Si el servidor exige TLS, añade `DB_SSL=1` (o `PGSSL=1`).
-2. En la app: **Información del negocio → Editar → Probar conexión a PostgreSQL**. Un pop-up dice "Conexión exitosa" (con la base, la versión y la latencia) o el motivo del fallo.
-3. `GET /api/pgtest` hace lo mismo por API. No toca ningún dato: sólo conecta y pregunta la versión.
+2. Al arrancar, la app crea las tablas si no existen. Si Postgres está vacío y en el volumen queda una base SQLite anterior, **importa su contenido una única vez** (contenido y archivos), para estrenar Postgres sin perder lo que ya había.
+3. Si Postgres no responde al arrancar, la app reintenta 15 veces y luego **falla el despliegue** con el motivo — no arranca a medias.
+4. **Probar conexión**: Información del negocio → Editar → "Probar conexión a PostgreSQL" (o `GET /api/pgtest`).
 
 > Si la base corre en el mismo Coolify, el host es el nombre interno del servicio de Postgres, no `localhost`.
+
+## Archivo: eliminar en dos pasos
+
+El botón de borrar de cualquier elemento (tareas, videos, checklist, procesos, productos y sus archivos, ejemplos y sus adjuntos, guiones, información, dudas) **archiva** en lugar de eliminar:
+
+- Lo archivado desaparece de la app, pero no se destruye nada — ni siquiera sus archivos subidos.
+- En **Información del negocio → Archivo** (modo edición) se lista todo lo archivado, con **Restaurar** y **Eliminar definitivamente**.
+- Eliminar definitivamente sólo funciona sobre algo ya archivado; es entonces cuando se limpian sus archivos (si nada más los usa).
+- "Vaciar onboarding" también archiva, no destruye.
+
+Por API: `DELETE /api/<entidad>/:id` archiva; `GET /api/archivo` lista; `POST /api/archivo/<entidad>/:id/restaurar` restaura; `DELETE /api/archivo/<entidad>/:id` elimina definitivamente.
 
 ## Deploy en Coolify
 
@@ -224,8 +238,10 @@ docker compose up --build
 ## Estructura
 
 ```
-server.js    API + estáticos + archivos subidos + esquema SQLite
-seed.js      Contenido inicial (sólo se inserta una vez, en una base nueva)
+server.js    API + estáticos + esquema (PostgreSQL o SQLite)
+lib/db.js    Adaptador de datos: mismo código para ambos motores
+lib/volumen.js  Detección de volumen persistente
+seed.js      Datos de ejemplo SÓLO para los tests (el servidor no lo usa)
 public/      La app (una sola página)
 test/        Pruebas de protección de datos y respaldo (npm test)
 Dockerfile   Imagen para Coolify
@@ -265,6 +281,9 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 | DELETE | `/api/attach/:id` | Quita la captura o el audio |
 | POST · PUT · DELETE | `/api/infos[/:id]` | Bloques de información del negocio |
 | POST · PUT · DELETE | `/api/dudas[/:id]` | Dudas de soporte |
+| GET | `/api/archivo` | Todo lo archivado |
+| POST | `/api/archivo/:ent/:id/restaurar` | Restaura un elemento archivado |
+| DELETE | `/api/archivo/:ent/:id` | Eliminación definitiva (sólo sobre lo archivado) |
 | PUT | `/api/dudas/:id/respuesta` | `{respuesta}` — responde y marca resuelta (vacía, reabre) |
 | PUT | `/api/dudas/:id/estado` | `{estado}` — `abierta` o `resuelta` |
 | PUT | `/api/{videos,procesos,products,ejemplos,infos,guiones,checklist}/order` | `{ids}` — guarda el orden del arrastre |
