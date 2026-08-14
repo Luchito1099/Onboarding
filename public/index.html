@@ -212,7 +212,7 @@
   .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
   .prod-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
   .prod-card:hover{transform:translateY(-3px);border-color:var(--line-2)}
-  .prod-cover{height:130px;background:linear-gradient(135deg,#e7ecf1,#dbe2e9);display:grid;place-items:center;color:var(--muted-2);position:relative;overflow:hidden}
+  .prod-cover{aspect-ratio:1;background:linear-gradient(135deg,#e7ecf1,#dbe2e9);display:grid;place-items:center;color:var(--muted-2);position:relative;overflow:hidden}
   .prod-cover svg{width:38px;height:38px}
   .prod-cover img{width:100%;height:100%;object-fit:cover}
   .prod-cover .brandtag{position:absolute;top:10px;left:10px;background:rgba(31,39,52,.8);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;z-index:2}
@@ -237,17 +237,29 @@
   .media-tabs{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap}
   .mtab{font-size:12.5px;font-weight:700;color:var(--muted);padding:7px 12px;border-radius:8px;cursor:pointer}
   .mtab.on{background:var(--accent-soft);color:var(--accent-ink)}
-  .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
-  .mtile{aspect-ratio:1;border-radius:10px;overflow:hidden;position:relative;background:linear-gradient(135deg,#e7ecf1,#dbe2e9);display:grid;place-items:center;cursor:pointer}
+  .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+  .mcard{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column}
+  .mtile{aspect-ratio:1;position:relative;background:linear-gradient(135deg,#e7ecf1,#dbe2e9);display:grid;place-items:center;cursor:pointer;overflow:hidden}
   .mtile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  .mtile .mic{color:var(--muted-2)}.mtile .mic svg{width:24px;height:24px}
-  .mtile .mname{position:absolute;bottom:0;left:0;right:0;background:rgba(31,39,52,.7);color:#fff;font-size:9px;font-weight:600;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:2}
-  .mtile.vid .play{width:34px;height:34px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:2}
-  .mtile.vid .play svg{width:14px;height:14px;color:var(--accent-ink)}
-  .mtile .del{position:absolute;top:5px;left:5px;width:26px;height:26px;border-radius:7px;background:rgba(31,39,52,.72);display:none;place-items:center;cursor:pointer;z-index:3}
-  .mtile:hover .del,body.editing .mtile .del{display:grid}
-  .mtile .del svg{width:12px;height:12px;color:#fff}
+  .mtile .mic{color:var(--muted-2)}.mtile .mic svg{width:26px;height:26px}
+  .mtile.vid .play{width:40px;height:40px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:2}
+  .mtile.vid .play svg{width:15px;height:15px;color:var(--accent-ink)}
+  .mtile .principal{position:absolute;top:8px;left:8px;background:var(--accent);color:#fff;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:3px 8px;border-radius:6px;z-index:3}
+  .mtile .ext{position:absolute;bottom:8px;right:8px;background:rgba(31,39,52,.75);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;z-index:3;text-transform:uppercase}
+  .mcard .mbody{padding:10px 11px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .mcard .mtitle2{font-size:12.5px;font-weight:700;line-height:1.3}
+  .mcard .muso{font-size:11.5px;color:var(--muted);line-height:1.45;flex:1}
+  .mcard .muso.vacio{color:var(--muted-2);font-style:italic}
+  .mcard .macts{display:flex;gap:6px;padding:0 11px 11px;flex-wrap:wrap}
+  .mcard .macts button{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 6px;font-size:11.5px;font-weight:700;cursor:pointer;min-height:36px}
+  .mcard .macts button:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .mcard .macts svg{width:13px;height:13px;flex-shrink:0}
+  .mcard .medit{display:none;gap:6px;padding:0 11px 11px}
+  body.editing .mcard .medit{display:flex}
   .mempty{grid-column:1/-1;font-size:12.5px;color:var(--muted-2);padding:14px;border:1.5px dashed var(--line-2);border-radius:10px;text-align:center}
+  .mtop{display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap}
+  .mtop .mcount{font-size:11.5px;color:var(--muted);font-weight:600}
+  .mtop .fbtn{margin-left:auto}
 
   /* FICHA SECTIONS */
   .fcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
@@ -277,6 +289,20 @@
   .obj.open .obj-a{max-height:600px}
   .obj-a .ain{padding:12px 14px 12px 48px;font-size:13.5px;line-height:1.55;color:var(--text)}
   .obj-a .ain::before{content:"→ ";color:var(--accent-ink);font-weight:800}
+  /* QUÉ LO HACE DIFERENTE */
+  .compara{margin-top:14px;border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  .crow{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:12px;padding:11px 13px;border-bottom:1px solid var(--line);font-size:13px;align-items:start;line-height:1.45}
+  .crow:last-child{border-bottom:none}
+  .crow .ck{font-weight:700;color:var(--muted)}
+  .crow .ca{font-weight:700;color:var(--accent-ink)}
+  .crow .cb{color:var(--muted)}
+  .crow.chead{background:var(--surface-2);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted-2)}
+  .crow.chead .ca{color:var(--accent-ink)}
+
+  /* MENSAJE DE WHATSAPP */
+  .wamsg{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid #16a34a;border-radius:10px;padding:13px 15px;font-size:13.5px;line-height:1.6;white-space:pre-wrap}
+  .fcard .filerow{margin-top:12px}
+
   .argu{background:var(--accent-soft);border:1px solid #c7e9e5;border-radius:10px;padding:14px;font-size:13.5px;line-height:1.55;color:var(--text);white-space:pre-wrap}
 
   .tab .new{font-size:9px;font-weight:800;text-transform:uppercase;color:#fff;background:var(--accent);padding:2px 6px;border-radius:5px}
@@ -619,6 +645,10 @@
     .fld input,.fld textarea,.fld select,.rw input,.rw textarea,.rw select,.linkrow input{font-size:16px}
     .modal-foot .btn{flex:1}
     .obj-a .ain{padding-left:16px}
+    .crow{grid-template-columns:1fr;gap:4px}
+    .crow.chead{display:none}
+    .crow .ca::before{content:"✓ "}
+    .crow .cb::before{content:"otros: ";text-transform:uppercase;font-size:10px;font-weight:800;letter-spacing:.4px}
   }
 </style>
 </head>
@@ -848,6 +878,8 @@ const ICON = {
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   grip: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
   upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>',
+  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>',
+  wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.7 15l-1.3 5 5.1-1.3A10 10 0 1 0 12 2zm5.8 14.2c-.2.7-1.4 1.3-2 1.4-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5-4.5-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .7.5l.9 2.2c.1.2.1.4 0 .5l-.4.6-.3.3c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2 1.3 2.3 1.4.3.1.5.1.6 0l.9-1c.2-.2.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.4z"/></svg>',
   img: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 3-3 4 4"/><circle cx="8.5" cy="9.5" r="1.3"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   film: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg>',
@@ -927,6 +959,45 @@ async function openLibrary(kind, onPick) {
     closeModal2();
     onPick(arr[+n.dataset.i]);
   }));
+}
+
+/* ================= COPIAR Y DESCARGAR CONTENIDO ================= */
+const absUrl = (u) => new URL(u, location.href).href;
+
+const aPng = (blob) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0);
+    c.toBlob((b) => (b ? resolve(b) : reject(new Error('no se pudo convertir'))), 'image/png');
+  };
+  img.onerror = () => reject(new Error('no se pudo leer la imagen'));
+  img.src = URL.createObjectURL(blob);
+});
+
+// En una imagen nuestra se copia la imagen misma (se pega en WhatsApp); si no, el link.
+async function copyMedia(m) {
+  if (m.kind === 'image' && isUpload(m.url) && window.ClipboardItem && navigator.clipboard?.write && window.isSecureContext) {
+    try {
+      const blob = await (await fetch(m.url)).blob();
+      const png = blob.type === 'image/png' ? blob : await aPng(blob);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      return toast('Imagen copiada — pégala en WhatsApp');
+    } catch { /* si el navegador no deja, se copia el link */ }
+  }
+  await copyText(absUrl(m.url));
+}
+
+function downloadMedia(m) {
+  if (!isUpload(m.url)) return window.open(m.url, '_blank', 'noopener');
+  const a = el('a');
+  a.href = m.url;
+  a.download = (m.title || 'archivo').replace(/[\\/:*?"<>|]+/g, '_') + m.url.slice(m.url.lastIndexOf('.'));
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 /* ================= ARRASTRAR PARA REORDENAR ================= */
@@ -1319,6 +1390,11 @@ const SCHEMAS = {
       { k: 'specs', label: 'Especificaciones', type: 'objlist', addLabel: 'Añadir especificación', rich: true, sub: [{ k: 'k', ph: 'Material', w: '150px' }, { k: 'v', ph: 'Tejido elástico' }] },
       { k: 'objeciones', label: 'Objeciones y respuesta', type: 'objlist', addLabel: 'Añadir objeción', rich: true, sub: [{ k: 'o', ph: 'Objeción del cliente', w: '190px' }, { k: 'r', type: 'area', ph: 'Cómo responder' }] },
       { k: 'argumentos', label: 'Cómo presentarlo', type: 'area', rich: true },
+      { k: 'difTexto', label: 'Qué lo hace diferente', type: 'area', rows: 4, rich: true, hint: 'Por qué elegir el nuestro y no otro parecido.' },
+      { k: 'compara', label: 'Comparativa contra otros', type: 'objlist', addLabel: 'Añadir fila', rich: true, sub: [{ k: 'k', ph: 'Aspecto (ej. Material)', w: '160px' }, { k: 'a', ph: 'El nuestro', w: '180px' }, { k: 'b', ph: 'Otros' }] },
+      { k: 'difUrl', label: 'Video que lo explica', type: 'media', kind: 'video', accept: 'video/mp4,video/webm,video/quicktime', ph: 'Link de YouTube o Drive…' },
+      { k: 'difNota', label: 'Comentario del video', ph: 'Opcional' },
+      { k: 'waMsg', label: 'Mensaje para WhatsApp', type: 'area', rows: 6, rich: true, hint: 'El que se envía cuando el cliente pide información. Usa [nombre] o [precio] como huecos.' },
     ],
   },
   ejemplo: {
@@ -1412,6 +1488,39 @@ function ebar(kind, item, opts) {
   };
   mk('Editar', ICON.pen, () => openEditor(kind, item));
   mk('Eliminar', ICON.trash, () => deleteItem(kind, item.id, opts.name), 'danger');
+  return bar;
+}
+
+// Acciones de un archivo del producto: arrastrar, editar su descripción de uso y quitarlo.
+function barraMedia(it, prodId) {
+  const bar = el('div', 'ebar');
+  const h = el('div', 'drag', ICON.grip);
+  h.title = 'Arrastra para reordenar';
+  bar.appendChild(h);
+  const mk = (title, icon, fn, cls) => {
+    const b = el('button', 'iconbtn' + (cls ? ' ' + cls : ''), icon);
+    b.type = 'button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.onclick = (e) => { e.stopPropagation(); fn(); };
+    bar.appendChild(b);
+  };
+  mk('Editar título y uso', ICON.pen, () => openForm({
+    title: 'Editar archivo',
+    sub: 'Título y para qué se usa',
+    fields: [
+      { k: 'title', label: 'Título' },
+      { k: 'nota', label: 'Para qué se usa', type: 'area', rows: 3, rich: true, hint: 'Lo que lee la vendedora para saber cuándo mandarlo.' },
+    ],
+    value: { title: it.title, nota: it.nota || '' },
+    req: ['title'],
+    onSave: async (vals) => { await api('PUT', `/media/${it.id}`, vals); await reload(); },
+  }));
+  mk('Quitar', ICON.trash, async () => {
+    if (!confirm('¿Quitar este archivo del producto?')) return;
+    try { await api('DELETE', `/media/${it.id}`); await reload(); toast('Quitado'); }
+    catch (err) { toast(err.message); }
+  }, 'danger');
   return bar;
 }
 
@@ -1886,6 +1995,20 @@ function openFicha(id, fresh) {
   const specs = (p.specs || []).map((s) => `<div class="spec"><span class="sk">${esc(s.k)}</span><span class="sv">${rich(s.v)}</span></div>`).join('');
   const packs = (p.packs || []).map((pk) => `<div class="pack ${pk.best ? 'best' : ''}">${pk.best ? '<span class="pbadge">Más vendido</span>' : ''}<div class="pq">${esc(pk.q)}</div><div class="pp">${esc(pk.p)}</div></div>`).join('');
   const objs = (p.objeciones || []).map((o) => `<div class="obj"><div class="obj-q"><span class="qm">?</span><span class="qt">${rich(o.o)}</span><span class="chev">${svgChev}</span></div><div class="obj-a"><div class="ain">${rich(o.r)}</div></div></div>`).join('');
+  const compHTML = (p.compara || []).map((c) => `<div class="crow"><span class="ck">${esc(c.k)}</span><span class="ca">${rich(c.a)}</span><span class="cb">${rich(c.b)}</span></div>`).join('');
+  const difCard = (p.difTexto || compHTML || p.difUrl)
+    ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 .4-4 3.3 1.3 5L12 19l-4.3 2.7L9 14.7 5 11.4 10 11z"/><path d="M19 3v3M21 4.5h-4"/></svg> Qué lo hace diferente</h3>
+        ${p.difTexto ? `<p class="fdesc">${rich(p.difTexto)}</p>` : ''}
+        ${compHTML ? `<div class="compara"><div class="crow chead"><span class="ck">Aspecto</span><span class="ca">${esc(p.name)}</span><span class="cb">Otros</span></div>${compHTML}</div>` : ''}
+        ${p.difUrl ? `<div style="margin-top:14px">${playerHTML(p.difUrl)}${p.difNota ? `<div class="vnota">${rich(p.difNota)}</div>` : ''}</div>` : ''}
+      </div>`
+    : '';
+  const waCard = p.waMsg
+    ? `<div class="fcard"><h3 style="color:#16a34a">${ICON.wa} Mensaje para WhatsApp</h3>
+        <div class="wamsg">${rich(p.waMsg)}</div>
+        <div class="filerow"><button class="fbtn solid" id="waCopy" type="button">${ICON.copy}Copiar mensaje</button><button class="fbtn" id="waOpen" type="button">${ICON.wa}Abrir WhatsApp</button></div>
+      </div>`
+    : '';
   d.innerHTML = `
     <div class="ficha-top"><div class="back" id="fichaBack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg> Volver a productos</div><div id="fichaEbar" style="margin-left:auto"></div></div>
     <div class="ficha-head"><div>${p.brand ? `<span class="btag">${esc(p.brand)}</span>` : ''}<h2>${esc(p.name)}</h2><div class="price">${esc(p.price)}</div></div></div>
@@ -1893,16 +2016,26 @@ function openFicha(id, fresh) {
     <div class="media">
       <div class="media-tabs"><div class="mtab" data-m="images">Imágenes (${p.media.images.length})</div><div class="mtab" data-m="videos">Videos del producto (${p.media.videos.length})</div></div>
       <div class="mhint" id="mhint">Videos que explican el producto: cómo se usa, materiales, colocación. Acepta YouTube y Google Drive (compartido como “Cualquiera con el enlace”). La vendedora los ve y le puede pasar el link al cliente.</div>
+      <div class="mtop"><span class="mcount" id="mediaCount"></span><button class="fbtn" id="mediaZip" type="button">${ICON.down}Descargar todo (ZIP)</button></div>
       <div class="mgrid" id="mediaGrid"></div>
-      <div class="linkrow" id="mediaAdd"><input id="mediaTitle" placeholder="Título (opcional)" style="max-width:200px"><input id="mediaUrl" placeholder="Pega el link…"><button id="mediaBtn">${svgPlus}Agregar</button></div>
+      <div class="draghint">Arrastra por el asa para reordenar. La primera imagen es la principal del producto.</div>
+      <div class="linkrow" id="mediaAdd"><input id="mediaTitle" placeholder="Título (opcional)" style="max-width:180px"><input id="mediaUrl" placeholder="Pega el link…"><button id="mediaBtn">${svgPlus}Agregar</button></div>
+      <div class="linkrow"><input id="mediaNota" placeholder="¿Para qué se usa? Ej. “Úsala como primera imagen: beneficios + prueba social”"></div>
       <div class="filerow"><button class="fbtn" id="mediaUpload" type="button">${ICON.upload}Subir archivo</button><button class="fbtn" id="mediaLib" type="button">${ICON.library}Biblioteca interna</button></div>
     </div>
 
+    ${waCard}
     ${p.desc || packs ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8v.5"/></svg> Información</h3><p class="fdesc">${rich(p.desc)}</p><div class="packs">${packs}</div></div>` : ''}
     ${benef ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Beneficios</h3>${benef}</div>` : ''}
     ${specs ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg> Especificaciones</h3>${specs}</div>` : ''}
     ${objs ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg> Objeciones frecuentes y cómo responder</h3>${objs}</div>` : ''}
-    ${p.argumentos ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 .4-4 3.3 1.3 5L12 19l-4.3 2.7L9 14.7 5 11.4 10 11z"/></svg> Cómo presentarlo</h3><div class="argu">${rich(p.argumentos)}</div></div>` : ''}`;
+    ${p.argumentos ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 .4-4 3.3 1.3 5L12 19l-4.3 2.7L9 14.7 5 11.4 10 11z"/></svg> Cómo presentarlo</h3><div class="argu">${rich(p.argumentos)}</div></div>` : ''}
+    ${difCard}`;
+
+  const waCopy = d.querySelector('#waCopy');
+  if (waCopy) waCopy.onclick = () => copyText(p.waMsg);
+  const waOpen = d.querySelector('#waOpen');
+  if (waOpen) waOpen.onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(waText(p.waMsg)), '_blank', 'noopener');
 
   document.getElementById('fichaBack').onclick = () => { showFichasGrid(); renderProdGrid(); };
   document.getElementById('fichaEbar').appendChild(ebar('producto', p, { name: `el producto “${p.name}”` }));
@@ -1919,34 +2052,68 @@ function openFicha(id, fresh) {
     document.getElementById('mhint').classList.toggle('show', fichaTab === 'videos');
     document.getElementById('mediaUrl').placeholder = fichaTab === 'videos' ? 'Link de YouTube o de Google Drive…' : 'Pega el link de la imagen (https://…)';
     const arr = p.media[fichaTab];
-    if (!arr.length) grid.innerHTML = `<div class="mempty">Aún no hay ${fichaTab === 'videos' ? 'videos' : 'imágenes'}. Agrega un link abajo.</div>`;
-    arr.forEach((it) => {
-      const tile = el('div', 'mtile' + (fichaTab === 'videos' ? ' vid' : ''));
-      const th = fichaTab === 'videos' ? thumbFor(it.url) : it.url;
-      tile.innerHTML = `${th ? `<img src="${esc(th)}" alt="" data-fallback>` : ''}${fichaTab === 'videos'
-        ? `<div class="play">${svgPlay}</div>`
-        : th ? '' : `<div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l4-4 3 3 3-3 4 4"/><circle cx="8.5" cy="9.5" r="1.5"/></svg></div>`}
-        <div class="del" title="Quitar">${ICON.x}</div><div class="mname">${esc(it.title)}</div>`;
-      tile.onclick = () => (fichaTab === 'videos' ? openVideo(it.url, it.title, p.name) : openImage(it.url, it.title));
-      tile.querySelector('.del').onclick = async (e) => {
-        e.stopPropagation();
-        try {
-          await api('DELETE', `/media/${it.id}`);
-          p.media[fichaTab] = p.media[fichaTab].filter((m) => m.id !== it.id);
-          renderMedia(); refreshTabs(); toast('Quitado');
-        } catch (err) { toast(err.message); }
-      };
-      grid.appendChild(tile);
+    const esVideo = fichaTab === 'videos';
+    document.getElementById('mediaCount').textContent = `${arr.length} ${esVideo ? (arr.length === 1 ? 'video' : 'videos') : (arr.length === 1 ? 'imagen' : 'imágenes')}`;
+    if (!arr.length) {
+      grid.innerHTML = `<div class="mempty">Aún no hay ${esVideo ? 'videos' : 'imágenes'}. Agrega un link, sube un archivo o elige uno de la biblioteca.</div>`;
+      return;
+    }
+    arr.forEach((it, i) => {
+      const th = esVideo ? thumbFor(it.url) : it.url;
+      const fuenteTag = isUpload(it.url) ? it.url.split('.').pop().toUpperCase() : driveId(it.url) ? 'Drive' : ytId(it.url) ? 'YouTube' : 'Link';
+      const card = el('div', 'mcard');
+      card.dataset.sid = it.id;
+      card.innerHTML = `
+        <div class="mtile${esVideo ? ' vid' : ''}">
+          ${th ? `<img src="${esc(th)}" alt="${esc(it.title)}" data-fallback loading="lazy">` : ''}
+          ${esVideo ? `<div class="play">${svgPlay}</div>` : th ? '' : `<div class="mic">${ICON.img}</div>`}
+          ${!esVideo && i === 0 ? '<span class="principal">Principal</span>' : ''}
+          <span class="ext">${esc(fuenteTag)}</span>
+        </div>
+        <div class="mbody">
+          <div class="mtitle2">${esc(it.title)}</div>
+          <div class="muso${it.nota ? '' : ' vacio'}">${it.nota ? rich(it.nota) : 'Sin descripción de uso'}</div>
+        </div>
+        <div class="macts">
+          <button class="mcopy" type="button">${ICON.copy}Copiar</button>
+          <button class="mdown" type="button">${ICON.down}Descargar</button>
+        </div>
+        <div class="medit"></div>`;
+      card.querySelector('.mtile').onclick = () => (esVideo ? openVideo(it.url, it.title, p.name) : openImage(it.url, it.title));
+      card.querySelector('.mcopy').onclick = () => copyMedia({ ...it, kind: esVideo ? 'video' : 'image' });
+      card.querySelector('.mdown').onclick = () => downloadMedia(it);
+      card.querySelector('.medit').appendChild(barraMedia(it, p.id));
+      grid.appendChild(card);
+    });
+    sortable(grid, async (ids) => {
+      try { await api('PUT', `/products/${p.id}/media/order`, { ids }); await reload(); toast('Orden guardado'); }
+      catch (err) { toast(err.message); await reload(); }
     });
     killBroken(grid);
   };
   const urlInp = document.getElementById('mediaUrl'), titleInp = document.getElementById('mediaTitle');
+  const notaInp = document.getElementById('mediaNota');
   const addMedia = async (url, title) => {
     try {
-      const r = await api('POST', `/products/${p.id}/media`, { kind: kind(), title, url });
-      p.media[fichaTab].push({ id: r.id, product_id: p.id, kind: kind(), title, url });
-      urlInp.value = ''; titleInp.value = '';
-      renderMedia(); refreshTabs(); toast('Agregado');
+      await api('POST', `/products/${p.id}/media`, { kind: kind(), title, url, nota: notaInp.value.trim() });
+      urlInp.value = ''; titleInp.value = ''; notaInp.value = '';
+      await reload();
+      toast('Agregado');
+    } catch (err) { toast(err.message); }
+  };
+  // Todo el material del producto que vive en este servidor, en un solo ZIP.
+  document.getElementById('mediaZip').onclick = async () => {
+    try {
+      const r = await fetch(`/api/products/${p.id}/zip`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo generar el ZIP');
+      const a = el('a');
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = `${(p.name || 'producto').replace(/[\\/:*?"<>|]+/g, '_')}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast('ZIP descargado');
     } catch (err) { toast(err.message); }
   };
   const tituloPorDefecto = (extra) => titleInp.value.trim() || extra || (fichaTab === 'videos' ? 'Video del producto' : 'Imagen del producto');

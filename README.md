@@ -9,7 +9,7 @@ Node 24 sin dependencias npm + SQLite embebido (`node:sqlite`). Imagen Docker ~8
 - **Runbook diario** — tareas por hora. Cada una lleva descripción, pasos, **qué hacer según el resultado**, tips, un botón al **proceso detallado**, su **video** y el **resultado esperado**. El "completado" se resetea solo cada día (zona horaria `TZ_APP`).
 - **Procesos** — paso a paso de cada proceso, con **hasta 2 videos, cada uno con su comentario**.
 - **Guiones por caso** — qué decir en cada situación: apertura, preguntas del cliente con su respuesta literal y cierre. Con buscador y botón de copiar.
-- **Fichas de producto** — packs, beneficios, specs, objeciones + imágenes y videos (YouTube o Drive).
+- **Fichas de producto** — packs, beneficios, specs, objeciones, **qué lo hace diferente** (con comparativa y video), **mensaje listo para WhatsApp** y una galería de fotos y videos con descripción de uso, copiar, descargar y ZIP.
 - **Ejemplos reales** — chats y llamadas modelo, con **capturas pegables**, **audio de la llamada** y un **guion en pop-up**.
 - **Información del negocio** — el contexto que hay que saber antes de operar.
 - **Soporte** — la vendedora escribe sus dudas (con captura) y se responden desde la misma pantalla.
@@ -54,6 +54,21 @@ Además de descripción, pasos y tips, cada tarea puede llevar:
 - **Resultado esperado** — qué debe quedar terminado para poder marcarla como completada.
 
 Todo es opcional: una tarea sin esos campos se ve igual que antes.
+
+## Ficha de producto
+
+**Galería.** Cada foto o video se ve en formato **1:1** con su título y, debajo, **para qué se usa** ("úsala como primera imagen: beneficios + prueba social"). La primera imagen lleva la marca *Principal* y es la portada del producto; el orden se cambia arrastrando.
+
+Cada archivo trae dos botones:
+
+- **Copiar** — en una imagen subida a este servidor copia **la imagen misma** al portapapeles, lista para pegar en WhatsApp; si el navegador no lo permite o es un link externo, copia el enlace.
+- **Descargar** — baja el archivo; si es un link de YouTube o Drive lo abre en su sitio.
+
+Arriba está **Descargar todo (ZIP)**: empaqueta en un solo archivo el material del producto que vive en este servidor (los links externos no se pueden empaquetar y se avisa).
+
+**Qué lo hace diferente.** Debajo de *Cómo presentarlo*: un texto, una **tabla comparativa** contra otros productos (aspecto · el nuestro · otros) y un **video** que lo explique, por link de YouTube, Google Drive o archivo subido. En móvil la tabla se apila.
+
+**Mensaje para WhatsApp.** Un mensaje predeterminado por producto para cuando el cliente pide información, con botones **Copiar mensaje** (en formato WhatsApp) y **Abrir WhatsApp**, que abre `wa.me` con el texto listo para elegir el contacto. Usa huecos como `[nombre]`.
 
 ## Biblioteca interna
 
@@ -160,7 +175,10 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 | POST · PUT · DELETE | `/api/procesos[/:id]` | Alta, edición y borrado de procesos |
 | PUT | `/api/procesos/:id/video` | `{n,url,nota}` — guarda el video 1 o 2 con su comentario |
 | POST · PUT · DELETE | `/api/products[/:id]` | Alta, edición y borrado de fichas |
-| POST | `/api/products/:id/media` | `{kind,title,url}` — agrega imagen o video |
+| POST | `/api/products/:id/media` | `{kind,title,url,nota}` — agrega imagen o video |
+| PUT | `/api/media/:id` | `{title,nota}` — edita el título y la descripción de uso |
+| PUT | `/api/products/:id/media/order` | `{ids}` — orden de la galería (el primero es la portada) |
+| GET | `/api/products/:id/zip` | Descarga en ZIP el material del producto subido a este servidor |
 | DELETE | `/api/media/:id` | Quita imagen o video del producto |
 | POST · PUT · DELETE | `/api/ejemplos[/:id]` | Alta, edición y borrado de ejemplos |
 | POST | `/api/ejemplos/:id/attach` | `{kind,title,url}` — captura (`image`) o audio (`audio`) |

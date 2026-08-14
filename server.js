@@ -14,7 +14,7 @@ const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const UPLOADS = join(DATA_DIR, 'uploads');
 const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
-const VERSION = '2026-08-13-7';
+const VERSION = '2026-08-13-8';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS dudas(
   estado TEXT DEFAULT 'abierta', respuesta TEXT DEFAULT '');
 `);
 
+// Migraciones sobre bases que ya existían.
+const columnas = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
+const addCol = (t, col, def) => { if (!columnas(t).includes(col)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${col} ${def}`); };
+addCol('media', 'nota', "TEXT DEFAULT ''");
+addCol('media', 'ord', 'INTEGER DEFAULT 0');
+
 const count = (t) => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
 const seed = (t, sql, rows) => {
   if (count(t)) return;
@@ -79,7 +85,7 @@ const procVids = (data, url) => {
 
 function getState() {
   const hoy = today();
-  const media = db.prepare('SELECT id,product_id,kind,title,url FROM media ORDER BY id').all();
+  const media = db.prepare('SELECT id,product_id,kind,title,url,nota,ord FROM media ORDER BY ord, id').all();
   const att = db.prepare('SELECT id,owner,owner_id,kind,title,url FROM attach ORDER BY ord, id').all();
   return {
     hoy,
@@ -240,6 +246,16 @@ const normProducto = (b) => ({
     return q || r ? { o: q, r } : null;
   }),
   argumentos: text(b.argumentos, 1500),
+  // Qué lo hace diferente: texto, comparativa contra otros y un video que lo explique.
+  difTexto: text(b.difTexto, 1500),
+  compara: objList(b.compara, 12, (c) => {
+    const k = str(c?.k, 80), a = str(c?.a, 160), otros = str(c?.b, 160);
+    return k || a || otros ? { k, a, b: otros } : null;
+  }),
+  difUrl: urlOrFail(b.difUrl),
+  difNota: text(b.difNota, 300),
+  // Mensaje listo para responder por WhatsApp cuando piden información.
+  waMsg: text(b.waMsg, 1500),
 });
 
 const normEjemplo = (b) => {
@@ -378,7 +394,7 @@ async function handleUpload(request, res) {
 // Un mismo archivo puede estar reutilizado desde la biblioteca en varios sitios,
 // así que sólo se borra del disco cuando ya no queda ninguna referencia.
 const REF_COLS = [['videos', 'url'], ['media', 'url'], ['attach', 'url'], ['dudas', 'url']];
-const REF_JSON = ['procesos', 'tasks'];
+const REF_JSON = ['procesos', 'tasks', 'products'];
 function urlEnUso(url) {
   for (const [t, col] of REF_COLS) if (db.prepare(`SELECT 1 FROM ${t} WHERE ${col}=? LIMIT 1`).get(url)) return true;
   for (const t of REF_JSON) if (db.prepare(`SELECT 1 FROM ${t} WHERE instr(data, ?) > 0 LIMIT 1`).get(url)) return true;
@@ -410,6 +426,96 @@ async function listarBiblioteca() {
     });
   }
   return files.sort((a, b) => b.at - a.at).slice(0, 300);
+}
+
+/* ================= ZIP (descarga masiva) ================= */
+// ZIP sin comprimir, escrito a mano para no añadir dependencias.
+const CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+const crc32 = (buf) => {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+};
+
+function zipFiles(entries) {
+  const locales = [], central = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = Buffer.from(e.name, 'utf8');
+    const crc = crc32(e.data);
+    const lh = Buffer.alloc(30);
+    lh.writeUInt32LE(0x04034b50, 0);
+    lh.writeUInt16LE(20, 4);
+    lh.writeUInt16LE(0x0800, 6); // nombres en utf-8
+    lh.writeUInt16LE(0, 8); // guardado sin comprimir
+    lh.writeUInt16LE(0, 10);
+    lh.writeUInt16LE(0x21, 12);
+    lh.writeUInt32LE(crc, 14);
+    lh.writeUInt32LE(e.data.length, 18);
+    lh.writeUInt32LE(e.data.length, 22);
+    lh.writeUInt16LE(name.length, 26);
+    lh.writeUInt16LE(0, 28);
+    locales.push(lh, name, e.data);
+
+    const ch = Buffer.alloc(46);
+    ch.writeUInt32LE(0x02014b50, 0);
+    ch.writeUInt16LE(20, 4);
+    ch.writeUInt16LE(20, 6);
+    ch.writeUInt16LE(0x0800, 8);
+    ch.writeUInt16LE(0, 10);
+    ch.writeUInt16LE(0, 12);
+    ch.writeUInt16LE(0x21, 14);
+    ch.writeUInt32LE(crc, 16);
+    ch.writeUInt32LE(e.data.length, 20);
+    ch.writeUInt32LE(e.data.length, 24);
+    ch.writeUInt16LE(name.length, 28);
+    ch.writeUInt32LE(offset, 42);
+    central.push(ch, name);
+    offset += 30 + name.length + e.data.length;
+  }
+  const cd = Buffer.concat(central);
+  const fin = Buffer.alloc(22);
+  fin.writeUInt32LE(0x06054b50, 0);
+  fin.writeUInt16LE(entries.length, 8);
+  fin.writeUInt16LE(entries.length, 10);
+  fin.writeUInt32LE(cd.length, 12);
+  fin.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locales, cd, fin]);
+}
+
+const sinAcentos = (s) => str(s, 60).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w .-]+/g, '_');
+
+// Todo el material de un producto que vive en este servidor, en un solo archivo.
+async function zipProducto(res, id) {
+  const p = must('products', id);
+  const nombre = JSON.parse(p.data).name || id;
+  const rows = db.prepare('SELECT kind,title,url,ord FROM media WHERE product_id=? ORDER BY ord, id').all(id)
+    .filter((m) => /^\/uploads\/[\w.-]+$/.test(m.url));
+  if (!rows.length) throw new HttpError(404, 'Este producto no tiene archivos subidos a este servidor (los links externos no se pueden empaquetar)');
+  const entries = [];
+  let n = 0;
+  for (const m of rows) {
+    const data = await readFile(join(UPLOADS, basename(m.url))).catch(() => null);
+    if (!data) continue;
+    n += 1;
+    entries.push({ name: `${String(n).padStart(2, '0')}-${sinAcentos(m.title) || m.kind}${extname(m.url)}`, data });
+  }
+  if (!entries.length) throw new HttpError(404, 'No se encontraron los archivos');
+  const zip = zipFiles(entries);
+  res.writeHead(200, {
+    'content-type': 'application/zip',
+    'content-length': zip.length,
+    'content-disposition': `attachment; filename="${sinAcentos(nombre) || 'producto'}.zip"`,
+  });
+  res.end(zip);
 }
 
 /* ================= HTTP ================= */
@@ -585,18 +691,29 @@ async function api(request, res, path) {
       db.prepare('INSERT INTO products(id,ord,data) VALUES(?,?,?)').run(newId, nextOrd('products'), JSON.stringify(p));
       return json(res, 201, { id: newId });
     }
+    if (M === 'GET' && id && sub === 'zip') return zipProducto(res, id);
     if (M === 'POST' && id && sub === 'media') {
       must('products', id);
       const url = urlOrFail(body.url);
       if (!url) throw new HttpError(400, 'Link inválido');
       const kind = body.kind === 'video' ? 'video' : 'image';
-      const r = db.prepare('INSERT INTO media(product_id,kind,title,url) VALUES(?,?,?,?)')
-        .run(id, kind, str(body.title, 120) || (kind === 'video' ? 'Video' : 'Imagen'), url);
+      const ord = db.prepare('SELECT COALESCE(MAX(ord),-1)+1 n FROM media WHERE product_id=?').get(id).n;
+      const r = db.prepare('INSERT INTO media(product_id,kind,title,url,nota,ord) VALUES(?,?,?,?,?,?)')
+        .run(id, kind, str(body.title, 120) || (kind === 'video' ? 'Video' : 'Imagen'), url, text(body.nota, 400), ord);
       return json(res, 201, { id: Number(r.lastInsertRowid) });
     }
-    if (M === 'PUT' && id && !sub) {
+    if (M === 'PUT' && id && sub === 'media' && seg[3] === 'order') {
       must('products', id);
+      const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number);
+      if (!ids.length) throw new HttpError(400, 'Orden vacío');
+      const up = db.prepare('UPDATE media SET ord=? WHERE id=? AND product_id=?');
+      ids.forEach((mid, i) => up.run(i, mid, id));
+      return ok(res);
+    }
+    if (M === 'PUT' && id && !sub) {
+      const antes = JSON.parse(must('products', id).data).difUrl;
       db.prepare('UPDATE products SET data=? WHERE id=?').run(JSON.stringify(normProducto(body)), id);
+      await gcUpload(antes);
       return ok(res);
     }
     if (M === 'DELETE' && id && !sub) {
@@ -609,11 +726,19 @@ async function api(request, res, path) {
     }
   }
 
-  if (ent === 'media' && M === 'DELETE' && id) {
-    const row = must('media', id);
-    db.prepare('DELETE FROM media WHERE id=?').run(Number(id));
-    await gcUpload(row.url);
-    return ok(res);
+  if (ent === 'media' && id) {
+    if (M === 'PUT' && !sub) {
+      const row = must('media', id);
+      db.prepare('UPDATE media SET title=?, nota=? WHERE id=?')
+        .run(str(body.title, 120) || (row.kind === 'video' ? 'Video' : 'Imagen'), text(body.nota, 400), Number(id));
+      return ok(res);
+    }
+    if (M === 'DELETE' && !sub) {
+      const row = must('media', id);
+      db.prepare('DELETE FROM media WHERE id=?').run(Number(id));
+      await gcUpload(row.url);
+      return ok(res);
+    }
   }
 
   /* ---------- EJEMPLOS REALES ---------- */

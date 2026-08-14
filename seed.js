@@ -77,7 +77,16 @@ export const PRODUCTS = [
      {o:'Lo voy a pensar',r:'No presiones. Pregunta: "¿Qué te hace dudar — la talla, el precio o el envío?" y resuelve esa duda puntual.'},
      {o:'¿Sirve para hacer deporte?',r:'Sí, ideal para correr, fútbol, básquet y cualquier actividad de impacto. Da soporte sin limitar el movimiento.'}
    ],
-   argumentos:'Vende el resultado, no el producto: "vuelve a moverte con seguridad". Enfócate en soporte, estabilidad y firmeza — nunca prometas curar lesiones ni uses "protección médica".'},
+   argumentos:'Vende el resultado, no el producto: "vuelve a moverte con seguridad". Enfócate en soporte, estabilidad y firmeza — nunca prometas curar lesiones ni uses "protección médica".',
+   difTexto:'La mayoría de tobilleras del mercado son de tela gruesa: abultan, dan calor y no entran en el zapato. La nuestra es de **1 mm** con panel de compresión, así que se usa todo el día bajo cualquier calzado.',
+   compara:[
+     {k:'Grosor',a:'1 mm, no abulta',b:'3–5 mm, no entra en el zapato'},
+     {k:'Uso diario',a:'Todo el día, transpirable',b:'Da calor a las pocas horas'},
+     {k:'Talla',a:'Única ajustable',b:'Tallas fijas, difícil acertar'},
+     {k:'Riesgo para el cliente',a:'Paga al recibir',b:'Pago adelantado'}
+   ],
+   difUrl:'',difNota:'',
+   waMsg:'¡Hola [nombre]! 👋 Te escribo de Nova Shop por la *Tobillera de compresión NOVAFLEX®*.\n\n✅ Da soporte y estabilidad sin abultar (solo 1 mm, entra en cualquier zapato)\n✅ Talla única ajustable\n✅ *Pago contra entrega*: pagas recién cuando la recibes en tu puerta\n\nPrecios:\n• 1 unidad: S/69\n• 2 unidades: S/99 (la más pedida)\n• 3 unidades: S/129\n\n¿A qué distrito te la envío?'},
   {id:'rodillera',name:'Rodillera de soporte NOVAFLEX®',brand:'NOVAFLEX®',price:'S/75 – S/135',
    desc:'Soporte de compresión para la rodilla que aporta estabilidad y firmeza en el movimiento, para entrenar o para el día a día.',
    packs:[{q:'1 unidad',p:'S/75'},{q:'2 unidades',p:'S/109',best:true},{q:'3 unidades',p:'S/135'}],
