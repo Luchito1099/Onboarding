@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
+import { rutaEnMontaje } from './lib/volumen.js';
 import { TASKS, VIDEOS, CHECKLIST, PROCESOS, PRODUCTS, EJEMPLOS, INFOS, GUIONES } from './seed.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -18,7 +19,8 @@ const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
-const VERSION = '2026-08-14-5';
+const ALLOW_EPHEMERAL = /^(1|true|si|sí|yes)$/i.test(process.env.ALLOW_EPHEMERAL || '');
+const VERSION = '2026-08-14-6';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -26,6 +28,26 @@ mkdirSync(UPLOADS, { recursive: true });
 mkdirSync(BACKUPS, { recursive: true });
 const DB_FILE = join(DATA_DIR, 'nova.db');
 const BASE_NUEVA = !existsSync(DB_FILE); // si es nueva, o es la primera vez o el volumen no persistió
+
+// ¿DATA_DIR está en un volumen montado, o en el disco temporal del contenedor?
+// Un contenedor sin volumen pierde TODO en cada despliegue, así que se detecta y se avisa.
+function enVolumenMontado(dir) {
+  try {
+    if (!existsSync('/proc/self/mountinfo')) return null; // fuera de Linux no se puede saber
+    return rutaEnMontaje(readFileSync('/proc/self/mountinfo', 'utf8'), dir);
+  } catch { return null; }
+}
+const EN_CONTENEDOR = existsSync('/.dockerenv');
+const EFIMERO = EN_CONTENEDOR && enVolumenMontado(DATA_DIR) === false;
+
+if (EFIMERO && !ALLOW_EPHEMERAL) {
+  console.error(`[FATAL] ${DATA_DIR} NO es un volumen persistente: está en el disco temporal del contenedor.`);
+  console.error('[FATAL] Todo lo que guarde el equipo ahí se borra en el próximo despliegue.');
+  console.error(`[FATAL] Solución: en Coolify → Storage → Persistent Storage, con Destination Path ${DATA_DIR}.`);
+  console.error('[FATAL] La app no arranca a propósito, para no crear una base que se va a perder.');
+  console.error('[FATAL] Si de verdad quieres arrancar sin volumen (una prueba de usar y tirar), pon ALLOW_EPHEMERAL=1.');
+  process.exit(1);
+}
 
 // Seguro de producción: con REQUIRE_DATA=1 la app se niega a arrancar si no encuentra la base,
 // en vez de crear una vacía y hacer creer que el contenido se borró.
@@ -125,6 +147,7 @@ function getState() {
     maxUploadMb: MAX_MB,
     baseCreada: meta('creada') || null,
     arrancado: ARRANQUE,
+    efimero: EFIMERO, // true = los datos NO están en un volumen persistente
     tasks: db.prepare('SELECT id,data,done_on FROM tasks ORDER BY ord').all()
       .map((r) => ({ id: r.id, ...JSON.parse(r.data), done: r.done_on === hoy })),
     videos: db.prepare('SELECT id,title,type,dur,guion,url FROM videos ORDER BY ord').all()
@@ -217,11 +240,7 @@ const normTask = (b) => ({
   title: req(b.title, 160, 'el título'),
   desc: text(b.desc, 1500),
   steps: strList(b.steps, 30, 300),
-  // Qué hacer según cómo salga la tarea: ok / a medias / mal.
-  outcomes: objList(b.outcomes, 12, (o) => {
-    const t = str(o?.t, 200), r = text(o?.r, 900);
-    return t || r ? { k: oneOf(o?.k, ['ok', 'warn', 'bad'], 'ok'), t, r } : null;
-  }),
+  outcomes: outcomes(b.outcomes), // qué hacer según cómo salga: ok / a medias / mal
   tips: tips(b.tips),
   procId: Number(b.procId) || null, // proceso detallado que amplía la tarea
   guionId: Number(b.guionId) || null, // guion de ventas que se usa al ejecutarla
@@ -252,10 +271,17 @@ const trimVids = (arr) => {
 const normVids = (v) => trimVids((Array.isArray(v) ? v : []).slice(0, 2)
   .map((x) => ({ url: urlOrFail(x?.url), nota: text(x?.nota, 400) })));
 
+// Qué hacer según cómo salga: mismo formato en tareas y en procesos.
+const outcomes = (v) => objList(v, 12, (o) => {
+  const t = str(o?.t, 200), r = text(o?.r, 900);
+  return t || r ? { k: oneOf(o?.k, ['ok', 'warn', 'bad'], 'ok'), t, r } : null;
+});
+
 const normProceso = (b) => ({
   name: req(b.name, 160, 'el nombre'),
   when: str(b.when, 120),
   steps: strList(b.steps, 30, 300),
+  outcomes: outcomes(b.outcomes),
   tips: tips(b.tips),
   vids: normVids(b.vids),
   guionId: Number(b.guionId) || null, // guion de ventas que se usa en este proceso
@@ -1051,6 +1077,7 @@ const server = createServer(async (request, res) => {
         arrancado: ARRANQUE,
         segundosEnPie: Math.round(process.uptime()),
         requireData: REQUIRE_DATA,
+        volumenPersistente: EN_CONTENEDOR ? !EFIMERO : null,
       });
     }
     if (path.startsWith('/api/')) return await api(request, res, path);

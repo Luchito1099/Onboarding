@@ -104,6 +104,9 @@
   #view-onboarding.vacio #checklist{display:none}
 
   /* MODO EDICIÓN */
+  .alerta{display:flex;align-items:flex-start;gap:12px;background:var(--crit-soft);border:1px solid var(--crit-line);color:#a4123a;border-radius:10px;padding:13px 15px;font-size:13px;line-height:1.5;margin-bottom:18px}
+  .alerta svg{width:20px;height:20px;flex-shrink:0;margin-top:1px}
+  .alerta code{background:rgba(225,29,72,.1);border-radius:4px;padding:1px 5px;font-size:12px}
   .editnote{display:none;align-items:center;gap:11px;background:var(--info-soft);border:1px solid var(--info-line);color:#1e40af;border-radius:10px;padding:11px 14px;font-size:12.5px;margin-bottom:18px;line-height:1.45}
   .editnote svg{width:17px;height:17px;flex-shrink:0}
   body.editing .editnote{display:flex}
@@ -314,6 +317,13 @@
   /* MENSAJE DE WHATSAPP */
   .wamsg{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid #16a34a;border-radius:10px;padding:13px 15px;font-size:13.5px;line-height:1.6;white-space:pre-wrap}
   .fcard .filerow{margin-top:12px}
+  .wacard h3{cursor:pointer;user-select:none;margin-bottom:0}
+  .wacard h3 .chev{margin-left:auto;color:var(--muted-2);transition:transform .2s}
+  .wacard h3 .chev svg{width:17px;height:17px;color:var(--muted-2)}
+  .wacard.open h3 .chev{transform:rotate(180deg)}
+  .wacard .wabody{max-height:0;overflow:hidden;transition:max-height .3s ease}
+  .wacard.open .wabody{max-height:1400px}
+  .wacard .wabin{padding-top:14px}
 
   .argu{background:var(--accent-soft);border:1px solid #c7e9e5;border-radius:10px;padding:14px;font-size:13.5px;line-height:1.55;color:var(--text);white-space:pre-wrap}
 
@@ -706,6 +716,10 @@
 
     <div class="body" id="bodyGrid">
       <div class="col-main">
+        <div class="alerta" id="avisoEfimero" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v5M12 17.5v.5"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          <div><b>Lo que escribas aquí se va a perder.</b> Los datos no están en un volumen persistente: en el próximo despliegue el servidor arrancará vacío otra vez. Monta un volumen en <code>/data</code> desde Coolify (Storage → Persistent Storage) antes de seguir cargando contenido.</div>
+        </div>
         <div class="editnote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg><div><b>Modo edición activo.</b> Puedes crear, editar, reordenar y eliminar el contenido de todas las pestañas. Los cambios se guardan en el servidor al pulsar <b>Guardar</b>.</div></div>
 
         <!-- ===== ONBOARDING ===== -->
@@ -1352,6 +1366,17 @@ function openForm({ title, sub, fields, value, req, onSave }) {
 const PRIO_OPTS = [{ v: 'crit', t: 'Crítico' }, { v: 'imp', t: 'Importante' }, { v: 'reg', t: 'Regular' }];
 const TIP_OPTS = [{ v: 'info', t: 'Info' }, { v: 'warn', t: 'Aviso' }, { v: 'alert', t: 'Alerta' }];
 const TIPS_FIELD = { k: 'tips', label: 'Tips', type: 'objlist', addLabel: 'Añadir tip', rich: true, sub: [{ k: 't', type: 'select', opts: TIP_OPTS, w: '110px' }, { k: 'x', ph: 'Texto del tip' }] };
+const OUTCOMES_FIELD = {
+  k: 'outcomes', label: '¿Qué hacer según el resultado?', type: 'objlist', addLabel: 'Añadir escenario', rich: true,
+  hint: 'Un escenario por cada respuesta posible del cliente o resultado de la gestión.',
+  sub: [
+    { k: 'k', type: 'select', opts: [{ v: 'ok', t: 'Salió bien' }, { v: 'warn', t: 'A medias' }, { v: 'bad', t: 'No salió' }], w: '135px' },
+    { k: 't', ph: 'Resultado', w: '180px' },
+    { k: 'r', type: 'area', ph: 'Qué hacer entonces' },
+  ],
+};
+const outcomesHTML = (lista) => (lista || []).map((o) =>
+  `<div class="outcome ${esc(o.k)}"><div class="oi">${ICON[o.k] || ICON.ok}</div><div><div class="ot">${rich(o.t)}</div>${o.r ? `<div class="or">${rich(o.r)}</div>` : ''}</div></div>`).join('');
 
 const SCHEMAS = {
   task: {
@@ -1367,7 +1392,7 @@ const SCHEMAS = {
       { k: 'range', label: 'Rango del bloque', half: true, ph: '09:10–10:30' },
       { k: 'desc', label: 'Descripción', type: 'area', rich: true },
       { k: 'steps', label: 'Pasos', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir', rich: true },
-      { k: 'outcomes', label: '¿Qué hacer según el resultado?', type: 'objlist', addLabel: 'Añadir escenario', rich: true, hint: 'Un escenario por cada respuesta posible del cliente o resultado de la gestión.', sub: [{ k: 'k', type: 'select', opts: [{ v: 'ok', t: 'Salió bien' }, { v: 'warn', t: 'A medias' }, { v: 'bad', t: 'No salió' }], w: '135px' }, { k: 't', ph: 'Resultado', w: '180px' }, { k: 'r', type: 'area', ph: 'Qué hacer entonces' }] },
+      OUTCOMES_FIELD,
       TIPS_FIELD,
       { k: 'procId', label: 'Proceso detallado', type: 'select', opts: () => [{ v: '', t: '— Ninguno —' }, ...S.procesos.map((p) => ({ v: String(p.id), t: p.name }))], hint: 'Añade un botón que abre el proceso completo paso a paso.' },
       { k: 'guionId', label: 'Guion de ventas', type: 'select', opts: () => [{ v: '', t: '— Ninguno —' }, ...S.guiones.map((g) => ({ v: String(g.id), t: g.title }))], hint: 'Añade un botón que abre el guion con las respuestas listas para copiar.' },
@@ -1402,6 +1427,7 @@ const SCHEMAS = {
       { k: 'name', label: 'Nombre del proceso' },
       { k: 'when', label: 'Cuándo se usa', ph: 'En cada confirmación' },
       { k: 'steps', label: 'Paso a paso', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir', rich: true },
+      OUTCOMES_FIELD,
       TIPS_FIELD,
       { k: 'guionId', label: 'Guion de ventas', type: 'select', opts: () => [{ v: '', t: '— Ninguno —' }, ...S.guiones.map((g) => ({ v: String(g.id), t: g.title }))], hint: 'Los guiones se escriben en la pestaña Guiones; aquí sólo eliges cuál se usa en este proceso.' },
       { k: 'vids', label: 'Videos', type: 'objlist', addLabel: 'Añadir video', rich: true, hint: 'Hasta 2 videos: YouTube o Google Drive. También puedes subir archivos desde la tarjeta del proceso.', sub: [{ k: 'url', ph: 'Link de YouTube o Drive', w: '210px' }, { k: 'nota', ph: 'Comentario breve' }] },
@@ -1589,7 +1615,7 @@ function renderRunbook() {
     if (t.block !== lastBlock) { lastBlock = t.block; tl.insertAdjacentHTML('beforeend', `<div class="block-label"><b>${esc(t.block)}</b><span class="rng">${esc(t.range)}</span><span class="ln"></span></div>`); }
     const tipsHTML = (t.tips || []).map((tp) => `<div class="tip ${esc(tp.t)}">${rich(tp.x)}</div>`).join('');
     const stepsHTML = (t.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${rich(s)}</div>`).join('');
-    const outHTML = (t.outcomes || []).map((o) => `<div class="outcome ${esc(o.k)}"><div class="oi">${ICON[o.k] || ICON.ok}</div><div><div class="ot">${rich(o.t)}</div>${o.r ? `<div class="or">${rich(o.r)}</div>` : ''}</div></div>`).join('');
+    const outHTML = outcomesHTML(t.outcomes);
     const proc = t.procId ? S.procesos.find((p) => p.id === t.procId) : null;
     const guionT = t.guionId ? S.guiones.find((g) => g.id === t.guionId) : null;
     const player = playerHTML(t.url);
@@ -1674,6 +1700,7 @@ function renderProcesos() {
     const stepsHTML = (p.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${rich(s)}</div>`).join('');
     const tipsHTML = (p.tips || []).map((tp) => `<div class="tip ${esc(tp.t)}">${rich(tp.x)}</div>`).join('');
     const guionP = p.guionId ? S.guiones.find((g) => g.id === p.guionId) : null;
+    const outHTML = outcomesHTML(p.outcomes);
     const slot = (i) => {
       const v = vids[i] || { url: '', nota: '' };
       return `<div class="vslot" data-n="${i + 1}">
@@ -1690,7 +1717,7 @@ function renderProcesos() {
     const node = el('div', 'proc');
     node.dataset.sid = p.id;
     node.innerHTML = `<div class="proc-head"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="pt"><b>${esc(p.name)}</b><span>${esc(p.when)}</span></div><span class="vflag ${nVids ? 'has' : 'no'}">${nVids ? `${nVids} video${nVids > 1 ? 's' : ''}` : 'Sin video'}</span><span class="chev">${svgChev}</span></div>
-      <div class="proc-body"><div class="pin">${stepsHTML ? `<div class="subh">Paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${tipsHTML ? `<div class="subh">Tips</div><div class="tips">${tipsHTML}</div>` : ''}${guionP ? `<div class="subh">${ICON.script} Guion de ventas</div><button class="golink" type="button"><span class="gi">${ICON.script}</span><span class="gt"><b>${esc(guionP.title)}</b><span>Qué decir y cómo responder, listo para copiar</span></span><span class="ga">${ICON.next}</span></button>` : ''}
+      <div class="proc-body"><div class="pin">${stepsHTML ? `<div class="subh">Paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${outHTML ? `<div class="subh">${ICON.branch} ¿Qué hacer según el resultado?</div>${outHTML}` : ''}${tipsHTML ? `<div class="subh">Tips</div><div class="tips">${tipsHTML}</div>` : ''}${guionP ? `<div class="subh">${ICON.script} Guion de ventas</div><button class="golink" type="button"><span class="gi">${ICON.script}</span><span class="gt"><b>${esc(guionP.title)}</b><span>Qué decir y cómo responder, listo para copiar</span></span><span class="ga">${ICON.next}</span></button>` : ''}
         <div class="subh">Videos del proceso</div>
         ${slot(0)}${slot(1)}
         <div class="hint vedit">Acepta YouTube, Google Drive o un archivo subido. Los videos de Drive deben estar compartidos como “Cualquiera con el enlace” para poder verse aquí dentro.</div>
@@ -2039,10 +2066,13 @@ function openFicha(id, fresh) {
         ${p.difUrl ? `<div style="margin-top:14px">${playerHTML(p.difUrl)}${p.difNota ? `<div class="vnota">${rich(p.difNota)}</div>` : ''}</div>` : ''}
       </div>`
     : '';
+  // El mensaje de WhatsApp llega plegado: se abre sólo cuando hace falta.
   const waCard = p.waMsg
-    ? `<div class="fcard"><h3 style="color:#16a34a">${ICON.wa} Mensaje para WhatsApp</h3>
-        <div class="wamsg">${rich(p.waMsg)}</div>
-        <div class="filerow"><button class="fbtn solid" id="waCopy" type="button">${ICON.copy}Copiar mensaje</button><button class="fbtn" id="waOpen" type="button">${ICON.wa}Abrir WhatsApp</button></div>
+    ? `<div class="fcard wacard" id="waCard"><h3 style="color:#16a34a">${ICON.wa} Mensaje para WhatsApp<span class="chev">${svgChev}</span></h3>
+        <div class="wabody"><div class="wabin">
+          <div class="wamsg">${rich(p.waMsg)}</div>
+          <div class="filerow"><button class="fbtn solid" id="waCopy" type="button">${ICON.copy}Copiar mensaje</button><button class="fbtn" id="waOpen" type="button">${ICON.wa}Abrir WhatsApp</button></div>
+        </div></div>
       </div>`
     : '';
   d.innerHTML = `
@@ -2068,6 +2098,8 @@ function openFicha(id, fresh) {
     ${p.argumentos ? `<div class="fcard"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 .4-4 3.3 1.3 5L12 19l-4.3 2.7L9 14.7 5 11.4 10 11z"/></svg> Cómo presentarlo</h3><div class="argu">${rich(p.argumentos)}</div></div>` : ''}
     ${difCard}`;
 
+  const waCard2 = d.querySelector('#waCard');
+  if (waCard2) waCard2.querySelector('h3').onclick = () => waCard2.classList.toggle('open');
   const waCopy = d.querySelector('#waCopy');
   if (waCopy) waCopy.onclick = () => copyText(p.waMsg);
   const waOpen = d.querySelector('#waOpen');
@@ -2556,11 +2588,17 @@ function renderAll() {
   renderInfos();
   renderDudas();
   renderAsk();
+  avisarSiEfimero();
   if (fichaId && S.products.some((p) => p.id === fichaId)) openFicha(fichaId, false);
   else showFichasGrid();
   placeTurno();
 }
 const reload = async () => { S = await api('GET', '/state'); renderAll(); };
+
+// Si el servidor avisa de que sus datos son temporales, se dice bien claro y arriba del todo.
+function avisarSiEfimero() {
+  document.getElementById('avisoEfimero').style.display = S && S.efimero ? 'flex' : 'none';
+}
 
 /* ================= INIT ================= */
 (async function init() {

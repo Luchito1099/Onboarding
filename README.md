@@ -130,10 +130,11 @@ Reglas que cumple la app, cubiertas por las pruebas de `npm test`:
 
 1. **Actualizar nunca borra.** El contenido de ejemplo se inserta **una sola vez en la vida de la base** (queda marcado en la tabla `meta`). Si el equipo borra todas las tareas, un reinicio **no** se las devuelve.
 2. **Las migraciones sólo añaden.** Nunca hay `DROP TABLE` ni se quitan columnas: una base de una versión anterior se actualiza conservando todo.
-3. **`REQUIRE_DATA=1` es el seguro de producción.** Con esa variable puesta, si al arrancar no encuentra `nova.db` la app **se niega a arrancar** (sale con error, el despliegue se marca como fallido) en vez de crear una base vacía. Es la protección contra un volumen mal montado.
+3. **Sin volumen no arranca.** Dentro de un contenedor, la app comprueba si `DATA_DIR` está en un volumen montado. Si no lo está, **se niega a arrancar** con un mensaje que explica cómo montarlo — porque todo lo que se guardara ahí se perdería en el siguiente despliegue. Para una prueba de usar y tirar se puede forzar con `ALLOW_EPHEMERAL=1`. Si aun así corre sin volumen, la app muestra un aviso rojo permanente y `/health` lo reporta en `volumenPersistente`.
+4. **`REQUIRE_DATA=1` es el segundo seguro.** Con esa variable puesta, si al arrancar no encuentra `nova.db` la app **se niega a arrancar** (sale con error, el despliegue se marca como fallido) en vez de crear una base vacía. Es la protección contra un volumen mal montado.
    > Actívala en Coolify en cuanto la app tenga contenido real. Es la diferencia entre "el deploy falla y lo arreglas" y "la app arranca vacía y parece que se borró todo".
-4. **Instantáneas automáticas** en `DATA_DIR/backups`: una en cada arranque, una al día y una **antes de cada restauración**. Se conservan las últimas 12 (`MAX_BACKUPS`).
-5. **Restaurar es reversible**: antes de sobrescribir se guarda cómo estaba.
+5. **Instantáneas automáticas** en `DATA_DIR/backups`: una en cada arranque, una al día y una **antes de cada restauración**. Se conservan las últimas 12 (`MAX_BACKUPS`).
+6. **Restaurar es reversible**: antes de sobrescribir se guarda cómo estaba.
 
 Las instantáneas viven en el mismo volumen, así que protegen de borrados y de restauraciones equivocadas, **no** de perder el volumen. Para eso, descarga la copia (abajo) y guárdala fuera.
 
@@ -196,6 +197,7 @@ Variables opcionales:
 | `TZ_APP` | `America/Lima` | Zona horaria del corte diario del runbook |
 | `MAX_UPLOAD_MB` | `100` | Tamaño máximo por archivo subido |
 | `REQUIRE_DATA` | — | Ponla a `1` en producción: si no encuentra la base, no arranca |
+| `ALLOW_EPHEMERAL` | — | Sólo para pruebas: permite arrancar sin volumen persistente |
 | `MAX_BACKUPS` | `12` | Instantáneas automáticas que se conservan |
 
 ## Local

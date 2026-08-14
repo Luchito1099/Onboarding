@@ -288,6 +288,31 @@ test('el arranque no ejecuta ninguna sentencia destructiva', async () => {
   assert.match(codigo, /ADD COLUMN/, 'las migraciones sólo añaden columnas');
 });
 
+/* ---------- 8b. detectar que los datos están en disco temporal ---------- */
+test('se detecta si la carpeta de datos NO está en un volumen persistente', async () => {
+  const { rutaEnMontaje } = await import('../lib/volumen.js');
+  const raiz = '25 0 8:1 / / rw,relatime shared:1 - ext4 /dev/sda1 rw';
+  const conVolumen = `${raiz}\n38 25 0:35 / /data rw,relatime shared:2 - ext4 /dev/sdb rw`;
+
+  assert.equal(rutaEnMontaje(conVolumen, '/data'), true, 'con el volumen montado en /data');
+  assert.equal(rutaEnMontaje(conVolumen, '/data/uploads'), true, 'y para lo que cuelga de él');
+  assert.equal(rutaEnMontaje(raiz, '/data'), false, 'sin volumen: /data es disco temporal del contenedor');
+  assert.equal(rutaEnMontaje(conVolumen, '/otra'), false, 'otra carpeta cualquiera no cuenta');
+  assert.equal(rutaEnMontaje(conVolumen, '/data/'), true, 'la barra final no despista');
+  assert.equal(rutaEnMontaje('', '/data'), false, 'sin información se considera no persistente');
+});
+
+test('el arranque avisa del volumen en el log y en /health', async () => {
+  const { proc, salida } = await arranca();
+  const health = await (await fetch(BASE + '/health')).json();
+  const s = await estado();
+  await para(proc);
+  // fuera de un contenedor no se puede saber, así que no bloquea ni miente
+  assert.equal(health.volumenPersistente, null, 'fuera de Docker se informa como desconocido');
+  assert.ok('efimero' in s, 'el estado dice si los datos son temporales');
+  assert.match(salida, /Contenido actual/);
+});
+
 /* ---------- 9. las instantáneas no crecen sin control ---------- */
 test('se conservan como máximo las últimas instantáneas configuradas', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'nova-rota-'));
