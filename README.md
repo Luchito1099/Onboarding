@@ -113,7 +113,8 @@ Los archivos se guardan en `DATA_DIR/uploads` —el mismo volumen que la base—
 
 Una sola interfaz para escritorio, tablet y móvil:
 
-- **≥1181 px** — barra lateral de áreas + columna de contenido + rail de "turno activo".
+- **≥1501 px** — el contenido se topa a 1500 px y se **centra**, para que en monitores anchos no quede todo pegado a la izquierda. Los textos largos se limitan a ~82 caracteres por línea aunque la columna sea ancha.
+- **1181–1500 px** — barra lateral + columna de contenido, que ocupa todo el ancho disponible, + rail de "turno activo".
 - **≤1180 px** — el rail desaparece y la tarjeta de turno activo se mueve al cuerpo del runbook.
 - **≤900 px** — la barra lateral pasa a ser un menú deslizable (botón ☰ + fondo oscurecido).
 - **≤640 px** — los modales se abren como hoja inferior, los formularios pasan a una columna y los inputs suben a 16 px para que iOS no haga zoom.

@@ -22,6 +22,7 @@
     --info:#2563eb;--info-soft:#eef3ff;--info-line:#d3e0fb;
     --radius:12px;
     --safe-b:env(safe-area-inset-bottom,0px);
+    --maxw:1500px; /* ancho útil máximo: en pantallas grandes el contenido se centra */
   }
   *{margin:0;padding:0;box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -58,6 +59,7 @@
   /* MAIN */
   .main{min-width:0;display:flex;flex-direction:column}
   .topbar{background:var(--surface);border-bottom:1px solid var(--line);padding:0 26px;position:sticky;top:0;z-index:20}
+  .topbar>.trow,.topbar>.tabs{max-width:var(--maxw);margin-left:auto;margin-right:auto;width:100%}
   .trow{display:flex;align-items:center;gap:12px;padding:14px 0 0}
   .trow h1{font-size:18px;font-weight:800;letter-spacing:-.3px}
   .trow .arole{font-size:12.5px;color:var(--muted)}
@@ -75,9 +77,11 @@
   .tab.active{color:var(--accent-ink);border-color:var(--accent)}
   .tab svg{width:16px;height:16px;flex-shrink:0}
 
-  .body{display:grid;grid-template-columns:minmax(0,1fr) 322px;flex:1}
+  .body{display:grid;grid-template-columns:minmax(0,1fr) 340px;flex:1;width:100%;max-width:var(--maxw);margin:0 auto}
   .body.full{grid-template-columns:minmax(0,1fr)}
-  .col-main{padding:24px 26px calc(60px + var(--safe-b));min-width:0;max-width:900px}
+  .col-main{padding:24px 26px calc(60px + var(--safe-b));min-width:0;width:100%}
+  /* La prosa larga se topa por legibilidad aunque la columna sea ancha. */
+  .panel-head p,.cdesc,.fdesc,.ibody,.dtext,.vc-guion .gin p,.say,.qa .qr,.wamsg,.argu{max-width:82ch}
   .rail{border-left:1px solid var(--line);background:var(--surface);padding:22px 18px;position:sticky;top:64px;height:fit-content}
   .body.full .rail{display:none}
   .view{display:none}.view.on{display:block;animation:fade .22s ease}
