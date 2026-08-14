@@ -5,7 +5,7 @@ Node 24 sin dependencias npm + SQLite embebido (`node:sqlite`). Imagen Docker ~8
 
 ## Qué hace
 
-- **Onboarding** — videos de lanzamiento con su guion. Pegas el link de YouTube o de Google Drive, o subes el archivo.
+- **Onboarding** — videos de lanzamiento con su guion y checklist de primeros días. **Llega vacío**: cada equipo carga los suyos. Mientras no haya contenido, la pestaña sólo se ve en modo edición.
 - **Runbook diario** — tareas por hora. Cada una lleva descripción, pasos, **qué hacer según el resultado**, tips, un botón al **proceso detallado**, su **video** y el **resultado esperado**. El "completado" se resetea solo cada día (zona horaria `TZ_APP`).
 - **Procesos** — paso a paso de cada proceso, con **hasta 2 videos, cada uno con su comentario**.
 - **Guiones por caso** — qué decir en cada situación: apertura, preguntas del cliente con su respuesta literal y cierre. Con buscador y botón de copiar.
@@ -174,7 +174,15 @@ Actualizar la app **nunca** toca el contenido guardado: el contenido inicial só
 5. **Environment Variables** → añade `REQUIRE_DATA=1` en cuanto la app tenga contenido real.
 6. Health check ya viene en el Dockerfile (`/health`).
 
-`GET /health` responde `{"ok":true,"version":"…"}`; esa versión sirve para comprobar de un vistazo si el deploy tomó el último commit.
+`GET /health` responde algo así:
+
+```json
+{"ok":true,"version":"…","baseCreada":"2026-08-14T…","arrancado":"2026-08-14T…","segundosEnPie":1840,"requireData":true}
+```
+
+- `version` — comprueba de un vistazo si el deploy tomó el último commit.
+- `baseCreada` — cuándo se creó la base. Si cambia, es que se perdió y se creó otra.
+- `segundosEnPie` — si al recargar vuelve siempre a un número pequeño, **el contenedor se está reiniciando solo**; con el volumen mal montado, cada reinicio vacía la base.
 
 Variables opcionales:
 
@@ -222,6 +230,7 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 | POST · PUT · DELETE | `/api/videos[/:id]` | Alta, edición y borrado de videos de onboarding |
 | PUT | `/api/videos/:id/url` | `{url}` — sólo el link o archivo |
 | POST · PUT · DELETE | `/api/checklist[/:id]` | Alta, edición y borrado de ítems |
+| POST | `/api/videos/vaciar` · `/api/checklist/vaciar` | Vacía la sección de onboarding de una vez |
 | PUT | `/api/checklist/:id/done` | `{done}` — marca el ítem |
 | POST · PUT · DELETE | `/api/procesos[/:id]` | Alta, edición y borrado de procesos |
 | PUT | `/api/procesos/:id/video` | `{n,url,nota}` — guarda el video 1 o 2 con su comentario |

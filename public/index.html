@@ -706,6 +706,7 @@
           <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Checklist de primeros días</div>
           <div id="checklist"></div>
           <button class="add" id="addCheck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Añadir ítem o día al checklist</button>
+          <div class="filerow vedit" style="margin-top:18px"><button class="fbtn" id="vaciarOnb" type="button">Vaciar toda la sección de onboarding</button></div>
         </section>
 
         <!-- ===== RUNBOOK ===== -->
@@ -1770,6 +1771,15 @@ function renderVideos() {
   sortable(list, (ids) => saveOrder('/videos', ids));
 }
 
+// La pestaña de onboarding sólo se muestra si hay contenido (o si estás editando).
+function actualizarTabOnboarding() {
+  const vacio = !S.videos.length && !S.checklist.length;
+  const tab = document.querySelector('.tab[data-tab="onboarding"]');
+  const ocultar = vacio && !EDIT;
+  tab.style.display = ocultar ? 'none' : '';
+  if (ocultar && tab.classList.contains('active')) activateTab('runbook');
+}
+
 function updateBanner() {
   const p = S.videos.filter((v) => !v.url).length;
   const b = document.getElementById('videoBanner');
@@ -2246,8 +2256,12 @@ document.getElementById('guionClear').onclick = () => {
 function renderInfos() {
   const total = ['tasks', 'videos', 'procesos', 'products', 'ejemplos', 'guiones', 'infos']
     .reduce((n, k) => n + (S[k] ? S[k].length : 0), 0);
-  document.getElementById('bkInfo').textContent =
-    `Ahora mismo hay ${total} elementos guardados y ${S.dudas.length} dudas de soporte. Versión del servidor: ${S.version || '—'}.`;
+  const arranque = S.arrancado ? new Date(S.arrancado) : null;
+  const mins = arranque ? Math.round((Date.now() - arranque.getTime()) / 60000) : null;
+  document.getElementById('bkInfo').innerHTML =
+    `Ahora mismo hay ${total} elementos guardados y ${S.dudas.length} dudas de soporte. Versión del servidor: ${esc(S.version || '—')}.<br>` +
+    `Base creada el ${S.baseCreada ? esc(fechaCorta(S.baseCreada)) : '—'} · servidor en pie desde hace ${mins === null ? '—' : mins < 60 ? `${mins} min` : `${Math.round(mins / 60)} h`}. ` +
+    'Si ese “en pie desde hace” se reinicia solo cada poco, el contenedor se está reiniciando y con el volumen mal montado eso vacía la base.';
   const list = document.getElementById('infoList');
   list.innerHTML = '';
   if (!S.infos.length) list.innerHTML = emptyBox('Todavía no hay información cargada. Activa “Editar” y añade el primer bloque.');
@@ -2487,6 +2501,7 @@ function setEdit(on) {
   const b = document.getElementById('editBtn');
   b.classList.toggle('on', on);
   document.getElementById('editBtnLabel').textContent = on ? 'Listo' : 'Editar';
+  if (S) actualizarTabOnboarding(); // al editar aparece aunque esté vacía
   if (on) toast('Modo edición activado');
 }
 document.getElementById('editBtn').onclick = () => setEdit(!EDIT);
@@ -2494,6 +2509,17 @@ document.getElementById('editBtn').onclick = () => setEdit(!EDIT);
 document.getElementById('addTask').onclick = () => openEditor('task');
 document.getElementById('addVideo').onclick = () => openEditor('video');
 document.getElementById('addCheck').onclick = () => openEditor('check');
+document.getElementById('vaciarOnb').onclick = async () => {
+  const n = S.videos.length + S.checklist.reduce((t, g) => t + g.items.length, 0);
+  if (!n) return toast('El onboarding ya está vacío');
+  if (!confirm(`Vas a borrar ${n} elementos del onboarding (videos y checklist).\n\nNo se puede deshacer, pero queda una copia automática. ¿Seguir?`)) return;
+  try {
+    await api('POST', '/videos/vaciar');
+    await api('POST', '/checklist/vaciar');
+    await reload();
+    toast('Onboarding vaciado');
+  } catch (err) { toast(err.message); }
+};
 document.getElementById('addProc').onclick = () => openEditor('proceso');
 document.getElementById('addProd').onclick = () => openEditor('producto');
 document.getElementById('addEj').onclick = () => openEditor('ejemplo');
@@ -2506,6 +2532,7 @@ function renderAll() {
   renderVideos();
   updateBanner();
   renderChecklist();
+  actualizarTabOnboarding();
   renderProcesos();
   renderProdGrid();
   renderEjemplos();

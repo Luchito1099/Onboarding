@@ -18,7 +18,7 @@ const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
-const VERSION = '2026-08-14-2';
+const VERSION = '2026-08-14-3';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -99,7 +99,8 @@ if (!YA_SEMBRADA) {
   setMeta('sembrada', '1');
   if (!meta('creada')) setMeta('creada', new Date().toISOString());
 }
-setMeta('ultimo_arranque', new Date().toISOString());
+const ARRANQUE = new Date().toISOString();
+setMeta('ultimo_arranque', ARRANQUE);
 setMeta('version', VERSION);
 
 /* ================= ESTADO ================= */
@@ -122,6 +123,8 @@ function getState() {
     hoy,
     version: VERSION,
     maxUploadMb: MAX_MB,
+    baseCreada: meta('creada') || null,
+    arrancado: ARRANQUE,
     tasks: db.prepare('SELECT id,data,done_on FROM tasks ORDER BY ord').all()
       .map((r) => ({ id: r.id, ...JSON.parse(r.data), done: r.done_on === hoy })),
     videos: db.prepare('SELECT id,title,type,dur,guion,url FROM videos ORDER BY ord').all()
@@ -752,6 +755,13 @@ async function api(request, res, path) {
   /* ---------- VIDEOS DE ONBOARDING ---------- */
   if (ent === 'videos') {
     if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('videos', body.ids) });
+    // Vaciar la sección entera de una vez (la app pide confirmación antes).
+    if (M === 'POST' && id === 'vaciar') {
+      const urls = db.prepare('SELECT url FROM videos').all().map((v) => v.url);
+      const n = db.prepare('DELETE FROM videos').run().changes;
+      for (const u of urls) await gcUpload(u);
+      return json(res, 200, { ok: true, borrados: n });
+    }
     if (M === 'POST' && !id) {
       const v = normVideo(body);
       const r = db.prepare('INSERT INTO videos(ord,title,type,dur,guion,url) VALUES(?,?,?,?,?,?)')
@@ -784,6 +794,10 @@ async function api(request, res, path) {
   /* ---------- CHECKLIST ---------- */
   if (ent === 'checklist') {
     if (M === 'PUT' && id === 'order') return json(res, 200, { n: setChecklistOrder(body.ids) });
+    if (M === 'POST' && id === 'vaciar') {
+      const n = db.prepare('DELETE FROM checklist').run().changes;
+      return json(res, 200, { ok: true, borrados: n });
+    }
     if (M === 'POST' && !id) {
       const c = normCheck(body);
       // El ítem nuevo entra al final de su día; si el día no existe, al final de todo.
@@ -1023,7 +1037,18 @@ async function api(request, res, path) {
 const server = createServer(async (request, res) => {
   const path = decodeURIComponent(new URL(request.url, 'http://x').pathname);
   try {
-    if (path === '/health') return json(res, 200, { ok: true, version: VERSION });
+    // /health también sirve para diagnosticar: si "arrancado" cambia a cada rato,
+    // el contenedor se está reiniciando y con un volumen mal montado eso borra la base.
+    if (path === '/health') {
+      return json(res, 200, {
+        ok: true,
+        version: VERSION,
+        baseCreada: meta('creada') || null,
+        arrancado: ARRANQUE,
+        segundosEnPie: Math.round(process.uptime()),
+        requireData: REQUIRE_DATA,
+      });
+    }
     if (path.startsWith('/api/')) return await api(request, res, path);
     if (request.method !== 'GET' && request.method !== 'HEAD') return json(res, 405, { error: 'Método no permitido' });
 

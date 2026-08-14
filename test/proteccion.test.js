@@ -55,12 +55,14 @@ after(() => rmSync(DIR, { recursive: true, force: true }));
 test('un redespliegue conserva lo editado, lo creado y el progreso', async () => {
   let { proc } = await arranca();
   const inicial = await estado();
-  assert.equal(inicial.tasks.length, 4, 'la base nueva arranca con el contenido de ejemplo');
+  assert.equal(inicial.tasks.length, 4, 'la base nueva arranca con el runbook de ejemplo');
+  await api('POST', '/api/checklist', { day: 'Día 1', item: 'Ítem para la prueba' });
 
   await api('PUT', `/api/tasks/${inicial.tasks[0].id}`, { title: 'Tarea real del equipo', time: '08:00' });
   const creada = (await api('POST', '/api/tasks', { title: 'Otra tarea real', time: '10:15' })).data.id;
   await api('POST', '/api/guiones', { title: 'Guion real', apertura: 'Hola' });
-  await api('PUT', `/api/checklist/${inicial.checklist[0].items[0].id}/done`, { done: true });
+  const item = (await estado()).checklist[0].items[0].id;
+  await api('PUT', `/api/checklist/${item}/done`, { done: true });
   await para(proc);
 
   ({ proc } = await arranca()); // esto es un deploy: mismo volumen, código nuevo
@@ -87,6 +89,51 @@ test('si el equipo borra contenido, un reinicio no se lo devuelve', async () => 
   const tras = (await estado()).tasks.length;
   await para(proc);
   assert.equal(tras, 0, 'las tareas borradas siguen borradas tras el reinicio');
+});
+
+/* ---------- 2b. el onboarding nace vacío y vaciarlo es definitivo ---------- */
+test('el onboarding no trae contenido de ejemplo en una base nueva', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nova-onb-'));
+  const dirOriginal = DIR;
+  DIR = dir;
+  const { proc } = await arranca();
+  const s = await estado();
+  await para(proc);
+  DIR = dirOriginal;
+  rmSync(dir, { recursive: true, force: true });
+
+  assert.equal(s.videos.length, 0, 'sin videos de ejemplo');
+  assert.equal(s.checklist.length, 0, 'sin checklist de ejemplo');
+});
+
+test('vaciar el onboarding lo deja vacío también después de reiniciar', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nova-vaciar-'));
+  const dirOriginal = DIR;
+  DIR = dir;
+
+  let { proc } = await arranca();
+  // el equipo carga sus propios videos y su checklist
+  await api('POST', '/api/videos', { title: 'Video propio', dur: '1:00' });
+  await api('POST', '/api/checklist', { day: 'Día 1', item: 'Un ítem propio' });
+  assert.equal((await estado()).videos.length, 1);
+
+  const r1 = await api('POST', '/api/videos/vaciar');
+  const r2 = await api('POST', '/api/checklist/vaciar');
+  assert.equal(r1.data.borrados, 1);
+  assert.equal(r2.data.borrados, 1);
+  let s = await estado();
+  assert.equal(s.videos.length, 0);
+  assert.equal(s.checklist.length, 0);
+  await para(proc);
+
+  ({ proc } = await arranca()); // reinicio / redespliegue
+  s = await estado();
+  await para(proc);
+  DIR = dirOriginal;
+  rmSync(dir, { recursive: true, force: true });
+
+  assert.equal(s.videos.length, 0, 'los videos borrados no vuelven al reiniciar');
+  assert.equal(s.checklist.length, 0, 'el checklist borrado tampoco vuelve');
 });
 
 /* ---------- 3. una base con esquema viejo se migra sin perder nada ---------- */

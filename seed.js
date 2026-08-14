@@ -28,20 +28,11 @@ export const TASKS = [
    tips:[{t:'alert',x:'11:00 am es el corte duro. Nada entra después.'}]}
 ];
 
-export const VIDEOS = [
-  {title:'Bienvenida + cómo funciona el COD y tu rol',type:'Tú hablando a cámara',dur:'5:00',guion:'Preséntate y explica qué vendemos, qué es el pago contra entrega (COD) y por qué la vendedora es la pieza que hace que el pedido llegue y se cobre. Cierra con la actitud que esperas: rapidez, orden y honestidad.'},
-  {title:'Tour de tus herramientas',type:'Grabación de pantalla',dur:'6:00',guion:'Muestra en pantalla, en un recorrido: Shopify, Telegram, WhatsApp, el CRM y el sistema de Delivery Normal. Solo el panorama; el detalle va en cada proceso.'},
-  {title:'Enviar el mensaje predeterminado Shopify → WhatsApp',type:'Grabación de pantalla',dur:'2:00',guion:'Haz el proceso real una vez: abre Telegram, copia el predeterminado y envíalo. Narra en voz alta. No edites.'},
-  {title:'Confirmar pedido y talla por WhatsApp',type:'Grabación de pantalla',dur:'3:00',guion:'Muestra cómo confirmas datos, dirección y talla, y cómo mueves el pedido a "confirmado". Recalca que la talla nunca se asume.'},
-  {title:'Registrar en Delivery Normal antes del cierre FenFung',type:'Grabación de pantalla',dur:'3:00',guion:'Muestra cómo filtras y registras los pedidos de Lima. Insiste en el corte de las 11:00 am.'},
-  {title:'Etiquetar y dar seguimiento',type:'Grabación de pantalla',dur:'2:00',guion:'Muestra cómo etiquetas por estado y marcas los que necesitan seguimiento.'}
-];
+// Onboarding: se entrega vacío a propósito. Cada equipo graba sus propios videos y
+// arma su checklist desde la app; no tiene sentido arrancar con ejemplos que hay que borrar.
+export const VIDEOS = [];
 
-export const CHECKLIST = [
-  {day:'Día 1',items:['Ver los 6 videos de lanzamiento en orden','Tener accesos: WhatsApp, Telegram, Shopify, CRM y Delivery Normal','Ver los ejemplos reales de chats y llamadas']},
-  {day:'Día 2',items:['Acompañar y observar una mañana real completa','Registrar 3 pedidos reales con apoyo']},
-  {day:'Día 3',items:['Operar sola con el Runbook diario abierto','Cerrar el día con revisión rápida']}
-];
+export const CHECKLIST = [];
 
 export const PROCESOS = [
   {name:'Enviar mensaje predeterminado Shopify → WhatsApp',when:'Apertura · cada mañana',
