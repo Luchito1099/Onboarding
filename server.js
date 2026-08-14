@@ -20,7 +20,7 @@ const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
 const ALLOW_EPHEMERAL = /^(1|true|si|sí|yes)$/i.test(process.env.ALLOW_EPHEMERAL || '');
-const VERSION = '2026-08-14-8';
+const VERSION = '2026-08-14-9';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -40,13 +40,11 @@ function enVolumenMontado(dir) {
 const EN_CONTENEDOR = existsSync('/.dockerenv');
 const EFIMERO = EN_CONTENEDOR && enVolumenMontado(DATA_DIR) === false;
 
-if (EFIMERO && !ALLOW_EPHEMERAL) {
-  console.error(`[FATAL] ${DATA_DIR} NO es un volumen persistente: está en el disco temporal del contenedor.`);
-  console.error('[FATAL] Todo lo que guarde el equipo ahí se borra en el próximo despliegue.');
-  console.error(`[FATAL] Solución: en Coolify → Storage → Persistent Storage, con Destination Path ${DATA_DIR}.`);
-  console.error('[FATAL] La app no arranca a propósito, para no crear una base que se va a perder.');
-  console.error('[FATAL] Si de verdad quieres arrancar sin volumen (una prueba de usar y tirar), pon ALLOW_EPHEMERAL=1.');
-  process.exit(1);
+// Sin volumen la app arranca igual (se está preparando la migración a Postgres),
+// pero avisa fuerte: en el log, en /health y con el cartel rojo dentro de la app.
+if (EFIMERO) {
+  console.warn(`[AVISO] ${DATA_DIR} NO es un volumen persistente: lo que se guarde ahí se pierde en cada despliegue.`);
+  console.warn(`[AVISO] Solución: Coolify → Storage → Persistent Storage con Destination Path ${DATA_DIR} — o migrar a PostgreSQL.`);
 }
 
 // Seguro de producción: con REQUIRE_DATA=1 la app se niega a arrancar si no encuentra la base,
