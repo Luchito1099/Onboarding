@@ -18,7 +18,7 @@ const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
-const VERSION = '2026-08-14-3';
+const VERSION = '2026-08-14-4';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });

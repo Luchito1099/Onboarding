@@ -5,7 +5,7 @@ Node 24 sin dependencias npm + SQLite embebido (`node:sqlite`). Imagen Docker ~8
 
 ## Qué hace
 
-- **Onboarding** — videos de lanzamiento con su guion y checklist de primeros días. **Llega vacío**: cada equipo carga los suyos. Mientras no haya contenido, la pestaña sólo se ve en modo edición.
+- **Onboarding** — videos de lanzamiento con su guion y checklist de primeros días. **Llega vacío**: cada equipo carga los suyos. La pestaña siempre está; mientras no haya contenido se ve en blanco, con una nota que explica cómo añadirlo.
 - **Runbook diario** — tareas por hora. Cada una lleva descripción, pasos, **qué hacer según el resultado**, tips, un botón al **proceso detallado**, su **video** y el **resultado esperado**. El "completado" se resetea solo cada día (zona horaria `TZ_APP`).
 - **Procesos** — paso a paso de cada proceso, con **hasta 2 videos, cada uno con su comentario**.
 - **Guiones por caso** — qué decir en cada situación: apertura, preguntas del cliente con su respuesta literal y cierre. Con buscador y botón de copiar.

@@ -94,6 +94,14 @@
   .subh svg{width:13px;height:13px;vertical-align:-2px;margin-right:5px;opacity:.8}
   .expected b svg{width:12px;height:12px;vertical-align:-1px;margin-right:4px}
   .empty{border:1.5px dashed var(--line-2);border-radius:11px;padding:20px;text-align:center;color:var(--muted-2);font-size:13px;font-weight:600;line-height:1.5}
+  /* Onboarding sin contenido: una sola nota en blanco, sin secciones ni avisos sueltos. */
+  #onbVacio{display:none;padding:34px 24px;max-width:560px;margin:8px auto 0}
+  #onbVacio b{color:var(--muted)}
+  #view-onboarding.vacio #onbVacio{display:block}
+  #view-onboarding.vacio #videoBanner,
+  #view-onboarding.vacio .section-title,
+  #view-onboarding.vacio #videoList,
+  #view-onboarding.vacio #checklist{display:none}
 
   /* MODO EDICIÓN */
   .editnote{display:none;align-items:center;gap:11px;background:var(--info-soft);border:1px solid var(--info-line);color:#1e40af;border-radius:10px;padding:11px 14px;font-size:12.5px;margin-bottom:18px;line-height:1.45}
@@ -699,6 +707,7 @@
         <!-- ===== ONBOARDING ===== -->
         <section class="view" id="view-onboarding">
           <div class="panel-head"><h2>Onboarding de ventas</h2><p>Todo lo que una vendedora nueva necesita para operar sola en 3 días. Los videos se ven el día 1; el runbook la guía desde el día 3.</p></div>
+          <div class="empty" id="onbVacio"><b>Todavía no hay contenido de onboarding.</b><br>Cuando grabes los videos o armes el checklist de primeros días, aparecerán aquí. Se añaden desde el botón <b>Editar</b> de arriba.</div>
           <div class="admin-banner" id="videoBanner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg><div id="videoBannerText"></div></div>
           <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h11v12H4z"/></svg> Videos de lanzamiento — se ven en orden</div>
           <div id="videoList"></div>
@@ -1771,13 +1780,9 @@ function renderVideos() {
   sortable(list, (ids) => saveOrder('/videos', ids));
 }
 
-// La pestaña de onboarding sólo se muestra si hay contenido (o si estás editando).
+// La pestaña siempre está; cuando no hay contenido se muestra en blanco, sin secciones sueltas.
 function actualizarTabOnboarding() {
-  const vacio = !S.videos.length && !S.checklist.length;
-  const tab = document.querySelector('.tab[data-tab="onboarding"]');
-  const ocultar = vacio && !EDIT;
-  tab.style.display = ocultar ? 'none' : '';
-  if (ocultar && tab.classList.contains('active')) activateTab('runbook');
+  document.getElementById('view-onboarding').classList.toggle('vacio', !S.videos.length && !S.checklist.length);
 }
 
 function updateBanner() {
