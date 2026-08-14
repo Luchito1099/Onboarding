@@ -1,5 +1,5 @@
-# Imagen mínima: Node 24 alpine, sin dependencias npm.
-# SQLite viene incluido en Node (módulo nativo node:sqlite).
+# Imagen mínima: Node 24 alpine. SQLite viene incluido en Node (node:sqlite);
+# pg es la única dependencia npm (cliente de PostgreSQL).
 FROM node:24-alpine
 
 ENV NODE_ENV=production \
@@ -8,7 +8,11 @@ ENV NODE_ENV=production \
     TZ_APP=America/Lima
 
 WORKDIR /app
-COPY package.json server.js seed.js ./
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev --no-audit --no-fund
+
+COPY server.js seed.js ./
+COPY lib ./lib
 COPY public ./public
 
 RUN mkdir -p /data && chown -R node:node /data /app

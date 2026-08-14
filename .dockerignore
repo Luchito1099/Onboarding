@@ -1,6 +1,8 @@
 .git
 .gitignore
 data
+node_modules
+test
 *.md
 nova-ventas.html
 docker-compose.yml

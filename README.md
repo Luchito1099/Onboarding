@@ -168,6 +168,16 @@ o bien, si el volumen no está montado:
 
 Actualizar la app **nunca** toca el contenido guardado: el contenido inicial sólo se inserta en tablas vacías y las migraciones sólo añaden columnas.
 
+## PostgreSQL (en preparación)
+
+La app sigue guardando en SQLite, pero ya trae el cliente de PostgreSQL y una prueba de conexión para preparar la migración:
+
+1. En Coolify, define `DATABASE_URL` (`postgres://usuario:clave@host:5432/base`) **o** el juego `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` (si el servidor exige TLS, añade `PGSSL=1`).
+2. En la app: **Información del negocio → Editar → Probar conexión a PostgreSQL**. Un pop-up dice "Conexión exitosa" (con la base, la versión y la latencia) o el motivo del fallo.
+3. `GET /api/pgtest` hace lo mismo por API. No toca ningún dato: sólo conecta y pregunta la versión.
+
+> Si la base corre en el mismo Coolify, el host es el nombre interno del servicio de Postgres, no `localhost`.
+
 ## Deploy en Coolify
 
 1. **New Resource → Application → Public/Private Repository**, apuntando a este repo.
@@ -226,6 +236,7 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 | GET | `/api/state` | Todo el contenido y el progreso |
 | POST | `/api/uploads` | Sube un archivo (cuerpo binario + `content-type`); devuelve `{url,kind,size}` |
 | GET | `/api/library` | Lista los archivos subidos, con tamaño, tipo y si están en uso |
+| GET | `/api/pgtest` | Prueba la conexión a PostgreSQL con las variables de entorno |
 | GET | `/api/backup` · `/api/backup/zip` | Copia de seguridad: JSON del contenido, o ZIP con contenido + archivos |
 | POST | `/api/restore` | Restaura una copia (cuerpo JSON o ZIP, o `{"snapshot":"…"}`). Guarda una copia previa |
 | GET | `/api/backups` · `/api/backups/:archivo` | Instantáneas automáticas del volumen: listar y descargar |

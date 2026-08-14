@@ -801,6 +801,7 @@
               <button class="fbtn" id="bkJson" type="button">Sólo el contenido (JSON)</button>
               <button class="fbtn" id="bkRestore" type="button">Restaurar desde una copia</button>
               <button class="fbtn" id="bkSnaps" type="button">Ver copias automáticas</button>
+              <button class="fbtn" id="pgTest" type="button">Probar conexión a PostgreSQL</button>
             </div>
             <div id="bkList"></div>
             <div class="hint" id="bkInfo"></div>
@@ -2344,6 +2345,34 @@ async function bajarCopia(ruta, nombre) {
 const hoyISO = () => (S && S.hoy) || 'copia';
 document.getElementById('bkZip').onclick = () => bajarCopia('/api/backup/zip', `nova-copia-${hoyISO()}.zip`);
 document.getElementById('bkJson').onclick = () => bajarCopia('/api/backup', `nova-copia-${hoyISO()}.json`);
+// Prueba rápida de PostgreSQL: pop-up verde si conecta, rojo con el motivo si no.
+document.getElementById('pgTest').onclick = async () => {
+  const btn = document.getElementById('pgTest');
+  btn.disabled = true;
+  btn.textContent = 'Probando…';
+  let r;
+  try { r = await api('GET', '/pgtest'); }
+  catch (err) { r = { ok: false, error: err.message }; }
+  btn.disabled = false;
+  btn.textContent = 'Probar conexión a PostgreSQL';
+  const iconoDB = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5V12c0 1.7 3.6 3 8 3s8-1.3 8-3V5.5M4 12v6.5c0 1.7 3.6 3 8 3s8-1.3 8-3V12"/></svg>';
+  if (r.ok) {
+    openModal2(
+      modalHead('Conexión exitosa', 'PostgreSQL respondió', '#16a34a', iconoDB, 'modalClose2') +
+      `<div class="modal-body"><div class="learn" style="margin-top:0"><b>✓ Conectado en ${esc(String(r.ms))} ms.</b><br>
+        Base: <b>${esc(r.base)}</b><br>Servidor: ${esc(r.version)}</div>
+        <p class="hint" style="margin-top:12px">La conexión funciona. Cuando confirmes, se migra todo el contenido a PostgreSQL para que no dependa del volumen.</p></div>`,
+    );
+  } else {
+    openModal2(
+      modalHead('Sin conexión', r.configurado === false ? 'Faltan las variables' : 'PostgreSQL no respondió', 'var(--crit)', iconoDB, 'modalClose2') +
+      `<div class="modal-body"><div class="tip alert" style="font-size:13px">${esc(r.error || 'Error desconocido')}</div>
+        ${r.configurado === false ? '' : `<p class="hint" style="margin-top:12px">Revisa host, puerto (5432), usuario y contraseña en las variables de entorno de Coolify. Si la base corre en el mismo Coolify, el host es el nombre interno del servicio, no “localhost”.${typeof r.ms === 'number' ? ` · Falló en ${esc(String(r.ms))} ms.` : ''}</p>`}
+      </div>`,
+    );
+  }
+};
+
 // Instantáneas que el propio servidor guarda en el volumen (arranque, diaria, antes de restaurar).
 document.getElementById('bkSnaps').onclick = async () => {
   const caja = document.getElementById('bkList');

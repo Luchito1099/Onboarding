@@ -20,7 +20,7 @@ const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
 const ALLOW_EPHEMERAL = /^(1|true|si|sí|yes)$/i.test(process.env.ALLOW_EPHEMERAL || '');
-const VERSION = '2026-08-14-6';
+const VERSION = '2026-08-14-7';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -677,6 +677,48 @@ async function api(request, res, path) {
   const M = request.method;
 
   if (ent === 'uploads' && M === 'POST') return handleUpload(request, res);
+
+  /* ---------- PRUEBA DE CONEXIÓN A POSTGRES ---------- */
+  // Sólo comprueba que se puede conectar con las variables de entorno; no toca ningún dato.
+  if (ent === 'pgtest' && M === 'GET') {
+    const cs = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
+    const host = process.env.PGHOST || process.env.POSTGRES_HOST || '';
+    if (!cs && !host) {
+      return json(res, 200, {
+        ok: false, configurado: false,
+        error: 'Faltan las variables de conexión. Define DATABASE_URL (postgres://usuario:clave@host:5432/base) o el juego PGHOST / PGPORT / PGUSER / PGPASSWORD / PGDATABASE.',
+      });
+    }
+    let pg;
+    try { ({ default: pg } = await import('pg')); }
+    catch { return json(res, 200, { ok: false, configurado: true, error: 'El módulo pg no está en esta build. Redespliega para que la imagen lo instale.' }); }
+    const t0 = Date.now();
+    const client = new pg.Client(cs ? {
+      connectionString: cs,
+      connectionTimeoutMillis: 6000,
+    } : {
+      host,
+      port: Number(process.env.PGPORT || process.env.POSTGRES_PORT || 5432),
+      user: process.env.PGUSER || process.env.POSTGRES_USER || 'postgres',
+      password: process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD || '',
+      database: process.env.PGDATABASE || process.env.POSTGRES_DB || 'postgres',
+      connectionTimeoutMillis: 6000,
+      ssl: /^(1|true)$/i.test(process.env.PGSSL || '') ? { rejectUnauthorized: false } : undefined,
+    });
+    try {
+      await client.connect();
+      const r = await client.query('SELECT version() AS v, current_database() AS db');
+      return json(res, 200, {
+        ok: true, configurado: true, ms: Date.now() - t0,
+        base: r.rows[0].db,
+        version: String(r.rows[0].v).split(' on ')[0],
+      });
+    } catch (err) {
+      return json(res, 200, { ok: false, configurado: true, ms: Date.now() - t0, error: String(err.message || err) });
+    } finally {
+      client.end().catch(() => {});
+    }
+  }
 
   /* ---------- COPIA DE SEGURIDAD ---------- */
   if (ent === 'backup' && M === 'GET') {

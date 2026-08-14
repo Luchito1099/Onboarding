@@ -313,6 +313,47 @@ test('el arranque avisa del volumen en el log y en /health', async () => {
   assert.match(salida, /Contenido actual/);
 });
 
+/* ---------- 8c. prueba de conexión a PostgreSQL ---------- */
+test('sin variables de Postgres, /api/pgtest lo dice claro y no rompe nada', async () => {
+  const { proc } = await arranca({ DATABASE_URL: '', POSTGRES_URL: '', PGHOST: '', POSTGRES_HOST: '' });
+  const r = await api('GET', '/api/pgtest');
+  await para(proc);
+  assert.equal(r.status, 200);
+  assert.equal(r.data.ok, false);
+  assert.equal(r.data.configurado, false, 'distingue "no configurado" de "falló"');
+  assert.match(r.data.error, /DATABASE_URL/, 'explica qué variables definir');
+});
+
+test('con Postgres inalcanzable, /api/pgtest devuelve el error sin colgarse', async () => {
+  const { proc } = await arranca({ PGHOST: '127.0.0.1', PGPORT: '9', PGUSER: 'x', PGPASSWORD: 'x', PGDATABASE: 'x' });
+  const t0 = Date.now();
+  const r = await api('GET', '/api/pgtest');
+  const tardo = Date.now() - t0;
+  const salud = await api('GET', '/health');
+  await para(proc);
+  assert.equal(r.status, 200);
+  assert.equal(r.data.ok, false);
+  assert.equal(r.data.configurado, true);
+  assert.ok(r.data.error, 'trae el motivo del fallo');
+  assert.ok(tardo < 10000, `responde en un tiempo razonable (${tardo} ms)`);
+  assert.equal(salud.data.ok, true, 'y la app sigue viva después del intento');
+});
+
+/* ---------- 8d. la imagen Docker trae todo lo que el servidor importa ---------- */
+test('el Dockerfile copia cada módulo local que server.js importa', async () => {
+  const { readFileSync } = await import('node:fs');
+  const docker = readFileSync(join(RAIZ, 'Dockerfile'), 'utf8');
+  const codigo = readFileSync(SERVER, 'utf8');
+  const locales = [...codigo.matchAll(/from '\.\/([^']+)'/g)].map((m) => m[1]);
+  assert.ok(locales.length >= 2, 'server.js importa módulos locales');
+  for (const ruta of locales) {
+    const raizModulo = ruta.split('/')[0];
+    assert.ok(new RegExp(`COPY [^\\n]*\\b${raizModulo}\\b`).test(docker),
+      `el Dockerfile debe copiar "${raizModulo}" (lo importa server.js como ./${ruta})`);
+  }
+  assert.match(docker, /npm install/, 'la imagen instala las dependencias npm (pg)');
+});
+
 /* ---------- 9. las instantáneas no crecen sin control ---------- */
 test('se conservan como máximo las últimas instantáneas configuradas', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'nova-rota-'));
