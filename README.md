@@ -120,6 +120,32 @@ Una sola interfaz para escritorio, tablet y móvil:
 
 Las grillas son fluidas (`auto-fill`), el arrastre usa eventos de puntero (funciona con dedo igual que con ratón) y el layout respeta el área segura de los móviles con notch.
 
+## Copia de seguridad (importante)
+
+En la pestaña **Información del negocio**, con el modo edición activo, hay un bloque **Copia de seguridad**:
+
+- **Descargar copia completa (ZIP)** — todo el contenido escrito por el equipo **y** los archivos subidos.
+- **Sólo el contenido (JSON)** — los textos, sin archivos.
+- **Restaurar desde una copia** — reemplaza todo el contenido actual por el del archivo. Pide confirmación porque es destructivo.
+
+Guarda la copia **fuera del servidor**. Si el volumen de datos se pierde, restaurar el ZIP devuelve el contenido y los archivos a su sitio.
+
+**Cómo saber si perdiste la base:** en los logs del contenedor, al arrancar, la app dice una de dos cosas:
+
+```
+Base existente reutilizada, no se toca el contenido guardado.
+Contenido actual: tasks=12 videos=6 ...
+```
+
+o bien, si el volumen no está montado:
+
+```
+[AVISO] No había base de datos en /data/nova.db: se ha creado una nueva con el contenido inicial.
+[AVISO] Si esperabas encontrar el contenido del equipo, el volumen persistente no está montado en /data.
+```
+
+Actualizar la app **nunca** toca el contenido guardado: el contenido inicial sólo se inserta en tablas vacías y las migraciones sólo añaden columnas.
+
 ## Deploy en Coolify
 
 1. **New Resource → Application → Public/Private Repository**, apuntando a este repo.
@@ -165,6 +191,8 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 | GET | `/api/state` | Todo el contenido y el progreso |
 | POST | `/api/uploads` | Sube un archivo (cuerpo binario + `content-type`); devuelve `{url,kind,size}` |
 | GET | `/api/library` | Lista los archivos subidos, con tamaño, tipo y si están en uso |
+| GET | `/api/backup` · `/api/backup/zip` | Copia de seguridad: JSON del contenido, o ZIP con contenido + archivos |
+| POST | `/api/restore` | Restaura una copia (cuerpo JSON o ZIP). Reemplaza todo el contenido |
 | POST · PUT · DELETE | `/api/guiones[/:id]` | Guiones por caso |
 | POST · PUT · DELETE | `/api/tasks[/:id]` | Alta, edición y borrado de tareas (se ordenan por hora) |
 | PUT | `/api/tasks/:id/done` | `{done}` — marca la tarea del día |

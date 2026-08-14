@@ -761,6 +761,16 @@
           <div class="draghint">Arrastra los bloques por el asa para cambiar el orden.</div>
           <div id="infoList"></div>
           <button class="add" id="addInfo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Añadir bloque de información</button>
+          <div class="fcard vedit" style="margin-top:22px">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 4v4h-4"/></svg> Copia de seguridad</h3>
+            <p class="fdesc">Descarga una copia de todo lo que el equipo ha escrito. Si algún día el servidor pierde los datos, se restaura desde aquí. El ZIP incluye además los archivos subidos.</p>
+            <div class="filerow">
+              <button class="fbtn solid" id="bkZip" type="button">Descargar copia completa (ZIP)</button>
+              <button class="fbtn" id="bkJson" type="button">Sólo el contenido (JSON)</button>
+              <button class="fbtn" id="bkRestore" type="button">Restaurar desde una copia</button>
+            </div>
+            <div class="hint" id="bkInfo"></div>
+          </div>
         </section>
 
         <!-- ===== SOPORTE ===== -->
@@ -2228,6 +2238,10 @@ document.getElementById('guionClear').onclick = () => {
 
 /* ================= INFORMACIÓN DEL NEGOCIO ================= */
 function renderInfos() {
+  const total = ['tasks', 'videos', 'procesos', 'products', 'ejemplos', 'guiones', 'infos']
+    .reduce((n, k) => n + (S[k] ? S[k].length : 0), 0);
+  document.getElementById('bkInfo').textContent =
+    `Ahora mismo hay ${total} elementos guardados y ${S.dudas.length} dudas de soporte. Versión del servidor: ${S.version || '—'}.`;
   const list = document.getElementById('infoList');
   list.innerHTML = '';
   if (!S.infos.length) list.innerHTML = emptyBox('Todavía no hay información cargada. Activa “Editar” y añade el primer bloque.');
@@ -2243,6 +2257,41 @@ function renderInfos() {
   });
   sortable(list, (ids) => saveOrder('/infos', ids));
 }
+
+/* ================= COPIA DE SEGURIDAD ================= */
+async function bajarCopia(ruta, nombre) {
+  try {
+    const r = await fetch(ruta);
+    if (!r.ok) throw new Error('No se pudo generar la copia');
+    const a = el('a');
+    a.href = URL.createObjectURL(await r.blob());
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Copia descargada — guárdala fuera del servidor');
+  } catch (err) { toast(err.message); }
+}
+const hoyISO = () => (S && S.hoy) || 'copia';
+document.getElementById('bkZip').onclick = () => bajarCopia('/api/backup/zip', `nova-copia-${hoyISO()}.zip`);
+document.getElementById('bkJson').onclick = () => bajarCopia('/api/backup', `nova-copia-${hoyISO()}.json`);
+document.getElementById('bkRestore').onclick = async () => {
+  const f = await pickFile('.zip,.json,application/zip,application/json');
+  if (!f) return;
+  if (!confirm(`Vas a reemplazar TODO el contenido actual por el de “${f.name}”.\n\nLo que haya ahora se pierde. ¿Seguir?`)) return;
+  try {
+    const r = await fetch('/api/restore', {
+      method: 'POST',
+      headers: { 'content-type': f.name.endsWith('.zip') ? 'application/zip' : 'application/json' },
+      body: f,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'No se pudo restaurar');
+    await reload();
+    toast(`Copia restaurada${data.archivos ? ` · ${data.archivos} archivos` : ''}`);
+  } catch (err) { toast(err.message); }
+};
 
 /* ================= SOPORTE ================= */
 let dudaFilter = 'all', askShotUrl = '';

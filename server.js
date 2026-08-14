@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join, extname, normalize, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
 import { TASKS, VIDEOS, CHECKLIST, PROCESOS, PRODUCTS, EJEMPLOS, INFOS, GUIONES } from './seed.js';
 
@@ -14,12 +15,14 @@ const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const UPLOADS = join(DATA_DIR, 'uploads');
 const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
-const VERSION = '2026-08-13-8';
+const VERSION = '2026-08-13-9';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
 mkdirSync(UPLOADS, { recursive: true });
-const db = new DatabaseSync(join(DATA_DIR, 'nova.db'));
+const DB_FILE = join(DATA_DIR, 'nova.db');
+const BASE_NUEVA = !existsSync(DB_FILE); // si es nueva, el volumen no persistió
+const db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 db.exec(`
@@ -518,6 +521,54 @@ async function zipProducto(res, id) {
   res.end(zip);
 }
 
+/* ================= COPIA DE SEGURIDAD ================= */
+const TABLAS = ['tasks', 'videos', 'checklist', 'procesos', 'products', 'media', 'ejemplos', 'attach', 'infos', 'dudas', 'guiones'];
+
+const backupJSON = () => {
+  const out = { app: 'nova-onboarding', version: VERSION, fecha: new Date().toISOString(), tablas: {} };
+  for (const t of TABLAS) out.tablas[t] = db.prepare(`SELECT * FROM ${t}`).all();
+  return out;
+};
+
+function restaurar(b) {
+  if (!b || typeof b !== 'object' || !b.tablas) throw new HttpError(400, 'El archivo no parece una copia de esta app');
+  db.exec('BEGIN');
+  try {
+    for (const t of TABLAS) {
+      db.exec(`DELETE FROM ${t}`);
+      const rows = Array.isArray(b.tablas[t]) ? b.tablas[t] : [];
+      if (!rows.length) continue;
+      const cols = columnas(t).filter((c) => c in rows[0]);
+      const st = db.prepare(`INSERT INTO ${t}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`);
+      for (const r of rows) st.run(...cols.map((c) => (r[c] === undefined || r[c] === null ? null : r[c])));
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw new HttpError(400, 'No se pudo restaurar: ' + err.message);
+  }
+}
+
+// Lector de ZIP mínimo, para poder devolver una copia completa (contenido + archivos).
+function unzip(buf) {
+  const out = {};
+  let i = 0;
+  while (i + 30 <= buf.length && buf.readUInt32LE(i) === 0x04034b50) {
+    const flags = buf.readUInt16LE(i + 6);
+    const metodo = buf.readUInt16LE(i + 8);
+    const comp = buf.readUInt32LE(i + 18);
+    const nameLen = buf.readUInt16LE(i + 26);
+    const extraLen = buf.readUInt16LE(i + 28);
+    const name = buf.toString('utf8', i + 30, i + 30 + nameLen);
+    const ini = i + 30 + nameLen + extraLen;
+    if (flags & 8) throw new HttpError(400, 'Ese ZIP guarda los tamaños al final y no se puede leer aquí. Vuelve a exportar la copia desde la app.');
+    const datos = buf.subarray(ini, ini + comp);
+    out[name] = metodo === 0 ? Buffer.from(datos) : inflateRawSync(datos);
+    i = ini + comp;
+  }
+  return out;
+}
+
 /* ================= HTTP ================= */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png' };
 
@@ -541,6 +592,55 @@ async function api(request, res, path) {
   const M = request.method;
 
   if (ent === 'uploads' && M === 'POST') return handleUpload(request, res);
+
+  /* ---------- COPIA DE SEGURIDAD ---------- */
+  if (ent === 'backup' && M === 'GET') {
+    const datos = backupJSON();
+    if (id === 'zip') {
+      const entries = [{ name: 'contenido.json', data: Buffer.from(JSON.stringify(datos, null, 2), 'utf8') }];
+      for (const name of await readdir(UPLOADS).catch(() => [])) {
+        if (!/^[\w.-]+$/.test(name)) continue;
+        const data = await readFile(join(UPLOADS, name)).catch(() => null);
+        if (data) entries.push({ name: 'uploads/' + name, data });
+      }
+      const zip = zipFiles(entries);
+      res.writeHead(200, {
+        'content-type': 'application/zip',
+        'content-length': zip.length,
+        'content-disposition': `attachment; filename="nova-copia-${today()}.zip"`,
+      });
+      return res.end(zip);
+    }
+    res.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      'content-disposition': `attachment; filename="nova-copia-${today()}.json"`,
+    });
+    return res.end(JSON.stringify(datos, null, 2));
+  }
+
+  if (ent === 'restore' && M === 'POST') {
+    const tipo = String(request.headers['content-type'] || '').split(';')[0].trim();
+    const raw = await readRaw(request, Math.max(MAX_MB, 200) * 1024 * 1024);
+    if (!raw.length) throw new HttpError(400, 'No llegó ningún archivo');
+    let restaurados = 0;
+    if (tipo === 'application/zip' || raw.readUInt32LE(0) === 0x04034b50) {
+      const files = unzip(raw);
+      const contenido = files['contenido.json'];
+      if (!contenido) throw new HttpError(400, 'El ZIP no trae contenido.json');
+      restaurar(JSON.parse(contenido.toString('utf8')));
+      for (const [name, data] of Object.entries(files)) {
+        if (!name.startsWith('uploads/')) continue;
+        const base = basename(name);
+        if (!/^[\w.-]+$/.test(base)) continue;
+        await writeFile(join(UPLOADS, base), data);
+        restaurados += 1;
+      }
+    } else {
+      restaurar(JSON.parse(raw.toString('utf8')));
+    }
+    return json(res, 200, { ok: true, archivos: restaurados });
+  }
+
   // Biblioteca interna: todo lo que ya se subió, para reutilizarlo sin volver a subirlo.
   if (ent === 'library' && M === 'GET' && !id) return json(res, 200, { files: await listarBiblioteca() });
 
@@ -882,7 +982,17 @@ const server = createServer(async (request, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`NOVA Onboarding ${VERSION} en http://0.0.0.0:${PORT} · datos en ${DATA_DIR}`));
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`NOVA Onboarding ${VERSION} en http://0.0.0.0:${PORT} · datos en ${DATA_DIR}`);
+  const resumen = TABLAS.map((t) => `${t}=${count(t)}`).join(' ');
+  if (BASE_NUEVA) {
+    console.warn('[AVISO] No había base de datos en ' + DB_FILE + ': se ha creado una nueva con el contenido inicial.');
+    console.warn('[AVISO] Si esperabas encontrar el contenido del equipo, el volumen persistente no está montado en ' + DATA_DIR + '. Revísalo antes de seguir usándola.');
+  } else {
+    console.log('Base existente reutilizada, no se toca el contenido guardado.');
+  }
+  console.log('Contenido actual: ' + resumen);
+});
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => server.close(() => { db.close(); process.exit(0); }));
