@@ -1269,6 +1269,7 @@ const SCHEMAS = {
       { k: 'outcomes', label: '¿Qué hacer según el resultado?', type: 'objlist', addLabel: 'Añadir escenario', rich: true, hint: 'Un escenario por cada respuesta posible del cliente o resultado de la gestión.', sub: [{ k: 'k', type: 'select', opts: [{ v: 'ok', t: 'Salió bien' }, { v: 'warn', t: 'A medias' }, { v: 'bad', t: 'No salió' }], w: '135px' }, { k: 't', ph: 'Resultado', w: '180px' }, { k: 'r', type: 'area', ph: 'Qué hacer entonces' }] },
       TIPS_FIELD,
       { k: 'procId', label: 'Proceso detallado', type: 'select', opts: () => [{ v: '', t: '— Ninguno —' }, ...S.procesos.map((p) => ({ v: String(p.id), t: p.name }))], hint: 'Añade un botón que abre el proceso completo paso a paso.' },
+      { k: 'guionId', label: 'Guion de ventas', type: 'select', opts: () => [{ v: '', t: '— Ninguno —' }, ...S.guiones.map((g) => ({ v: String(g.id), t: g.title }))], hint: 'Añade un botón que abre el guion con las respuestas listas para copiar.' },
       { k: 'url', label: 'Video de cómo ejecutarla', type: 'media', kind: 'video', accept: 'video/mp4,video/webm,video/quicktime', ph: 'Link de YouTube o Drive…' },
       { k: 'nota', label: 'Comentario del video', ph: 'Opcional' },
       { k: 'expected', label: 'Resultado esperado', type: 'area', rows: 3, rich: true, hint: 'Qué debe quedar terminado para poder marcarla como completada.' },
@@ -1301,6 +1302,7 @@ const SCHEMAS = {
       { k: 'when', label: 'Cuándo se usa', ph: 'En cada confirmación' },
       { k: 'steps', label: 'Paso a paso', type: 'list', addLabel: 'Añadir paso', ph: 'Paso a seguir', rich: true },
       TIPS_FIELD,
+      { k: 'guionId', label: 'Guion de ventas', type: 'select', opts: () => [{ v: '', t: '— Ninguno —' }, ...S.guiones.map((g) => ({ v: String(g.id), t: g.title }))], hint: 'Los guiones se escriben en la pestaña Guiones; aquí sólo eliges cuál se usa en este proceso.' },
       { k: 'vids', label: 'Videos', type: 'objlist', addLabel: 'Añadir video', rich: true, hint: 'Hasta 2 videos: YouTube o Google Drive. También puedes subir archivos desde la tarjeta del proceso.', sub: [{ k: 'url', ph: 'Link de YouTube o Drive', w: '210px' }, { k: 'nota', ph: 'Comentario breve' }] },
     ],
   },
@@ -1449,13 +1451,14 @@ function renderRunbook() {
     const stepsHTML = (t.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${rich(s)}</div>`).join('');
     const outHTML = (t.outcomes || []).map((o) => `<div class="outcome ${esc(o.k)}"><div class="oi">${ICON[o.k] || ICON.ok}</div><div><div class="ot">${rich(o.t)}</div>${o.r ? `<div class="or">${rich(o.r)}</div>` : ''}</div></div>`).join('');
     const proc = t.procId ? S.procesos.find((p) => p.id === t.procId) : null;
+    const guionT = t.guionId ? S.guiones.find((g) => g.id === t.guionId) : null;
     const player = playerHTML(t.url);
     const item = el('div', 'task' + (t.done ? ' done' : ''));
     item.innerHTML = `
       <div class="tl"><span class="tt">${esc(t.time)}</span><span class="tn"></span><span class="tline"></span></div>
       <div class="card ${i === 0 ? 'open' : ''}">
         <div class="chead"><span class="cdot ${esc(t.prio)}"></span><span class="tag" style="${t.prio === 'crit' ? 'background:var(--crit-soft);color:var(--crit)' : t.prio === 'reg' ? 'background:var(--ok-soft);color:var(--ok)' : ''}">${esc(t.tag)}</span><span class="ct">${esc(t.title)}<span class="cdur">${esc(t.dur)}</span></span><span class="nowpill" style="display:none">Ahora</span><span class="chev">${svgChev}</span></div>
-        <div class="cbody"><div class="inner"><p class="cdesc">${rich(t.desc)}</p>${stepsHTML ? `<div class="subh">Cómo hacerlo — paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${outHTML ? `<div class="subh">${ICON.branch} ¿Qué hacer según el resultado?</div>${outHTML}` : ''}${tipsHTML ? `<div class="subh">${ICON.bulb} Tips importantes</div><div class="tips">${tipsHTML}</div>` : ''}${proc ? `<div class="subh">${ICON.link} Proceso detallado</div><button class="golink" type="button"><span class="gi">${ICON.script}</span><span class="gt"><b>${esc(proc.name)}</b><span>Ver el proceso completo paso a paso</span></span><span class="ga">${ICON.next}</span></button>` : ''}${player ? `<div class="subh">${ICON.film} Video</div>${player}${t.nota ? `<div class="vnota">${rich(t.nota)}</div>` : ''}` : ''}${t.expected ? `<div class="expected"><b>${ICON.check2} Resultado esperado</b>${rich(t.expected)}</div>` : ''}<div class="cactions"><button class="btn-done">${svgCheck.replace('currentColor', '#fff')} ${t.done ? 'Completada' : 'Marcar como completada'}</button></div></div></div>
+        <div class="cbody"><div class="inner"><p class="cdesc">${rich(t.desc)}</p>${stepsHTML ? `<div class="subh">Cómo hacerlo — paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${outHTML ? `<div class="subh">${ICON.branch} ¿Qué hacer según el resultado?</div>${outHTML}` : ''}${tipsHTML ? `<div class="subh">${ICON.bulb} Tips importantes</div><div class="tips">${tipsHTML}</div>` : ''}${proc ? `<div class="subh">${ICON.link} Proceso detallado</div><button class="golink" type="button" data-go="proc"><span class="gi">${ICON.list}</span><span class="gt"><b>${esc(proc.name)}</b><span>Ver el proceso completo paso a paso</span></span><span class="ga">${ICON.next}</span></button>` : ''}${guionT ? `<div class="subh">${ICON.script} Guion de ventas</div><button class="golink" type="button" data-go="guion"><span class="gi">${ICON.script}</span><span class="gt"><b>${esc(guionT.title)}</b><span>Qué decir y cómo responder, listo para copiar</span></span><span class="ga">${ICON.next}</span></button>` : ''}${player ? `<div class="subh">${ICON.film} Video</div>${player}${t.nota ? `<div class="vnota">${rich(t.nota)}</div>` : ''}` : ''}${t.expected ? `<div class="expected"><b>${ICON.check2} Resultado esperado</b>${rich(t.expected)}</div>` : ''}<div class="cactions"><button class="btn-done">${svgCheck.replace('currentColor', '#fff')} ${t.done ? 'Completada' : 'Marcar como completada'}</button></div></div></div>
       </div>`;
     item.querySelector('.chead').onclick = () => item.querySelector('.card').classList.toggle('open');
     item.querySelector('.btn-done').onclick = async (e) => {
@@ -1464,8 +1467,10 @@ function renderRunbook() {
       try { await api('PUT', `/tasks/${t.id}/done`, { done: next }); t.done = next; renderRunbook(); } catch (err) { toast(err.message); }
     };
     // El orden del runbook lo define la hora, por eso la tarea no se sube ni se baja a mano.
-    const go = item.querySelector('.golink');
-    if (go) go.onclick = (e) => { e.stopPropagation(); goProceso(proc.id); };
+    item.querySelectorAll('.golink').forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      if (b.dataset.go === 'guion') goGuion(t.guionId); else goProceso(t.procId);
+    }));
     item.querySelector('.cactions').appendChild(ebar('task', t, { name: `la tarea “${t.title}”` }));
     tl.appendChild(item);
   });
@@ -1528,6 +1533,7 @@ function renderProcesos() {
     const nVids = vids.filter((v) => v.url).length;
     const stepsHTML = (p.steps || []).map((s, j) => `<div class="step"><span class="sn">${j + 1}</span>${rich(s)}</div>`).join('');
     const tipsHTML = (p.tips || []).map((tp) => `<div class="tip ${esc(tp.t)}">${rich(tp.x)}</div>`).join('');
+    const guionP = p.guionId ? S.guiones.find((g) => g.id === p.guionId) : null;
     const slot = (i) => {
       const v = vids[i] || { url: '', nota: '' };
       return `<div class="vslot" data-n="${i + 1}">
@@ -1544,13 +1550,15 @@ function renderProcesos() {
     const node = el('div', 'proc');
     node.dataset.sid = p.id;
     node.innerHTML = `<div class="proc-head"><div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="pt"><b>${esc(p.name)}</b><span>${esc(p.when)}</span></div><span class="vflag ${nVids ? 'has' : 'no'}">${nVids ? `${nVids} video${nVids > 1 ? 's' : ''}` : 'Sin video'}</span><span class="chev">${svgChev}</span></div>
-      <div class="proc-body"><div class="pin">${stepsHTML ? `<div class="subh">Paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${tipsHTML ? `<div class="subh">Tips</div><div class="tips">${tipsHTML}</div>` : ''}
+      <div class="proc-body"><div class="pin">${stepsHTML ? `<div class="subh">Paso a paso</div><div class="steps">${stepsHTML}</div>` : ''}${tipsHTML ? `<div class="subh">Tips</div><div class="tips">${tipsHTML}</div>` : ''}${guionP ? `<div class="subh">${ICON.script} Guion de ventas</div><button class="golink" type="button"><span class="gi">${ICON.script}</span><span class="gt"><b>${esc(guionP.title)}</b><span>Qué decir y cómo responder, listo para copiar</span></span><span class="ga">${ICON.next}</span></button>` : ''}
         <div class="subh">Videos del proceso</div>
         ${slot(0)}${slot(1)}
         <div class="hint vedit">Acepta YouTube, Google Drive o un archivo subido. Los videos de Drive deben estar compartidos como “Cualquiera con el enlace” para poder verse aquí dentro.</div>
       </div></div>`;
     node.querySelector('.proc-head').onclick = () => node.classList.toggle('open');
     node.querySelector('.proc-head').insertBefore(ebar('proceso', p, { sort: true, name: `el proceso “${p.name}”` }), node.querySelector('.proc-head .chev'));
+    const goG = node.querySelector('.golink');
+    if (goG) goG.onclick = (e) => { e.stopPropagation(); goGuion(p.guionId); };
 
     node.querySelectorAll('.vslot').forEach((sl) => {
       const n = Number(sl.dataset.n);
@@ -2195,6 +2203,20 @@ function goProceso(id) {
   activateTab('procesos');
   const node = document.querySelector(`#procList [data-sid="${id}"]`);
   if (!node) return toast('Ese proceso ya no existe');
+  node.classList.add('open');
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// Desde una tarea o un proceso al guion de ventas correspondiente.
+function goGuion(id) {
+  guionQuery = '';
+  guionTag = 'all';
+  guionSearch.value = '';
+  document.getElementById('guionClear').style.display = 'none';
+  renderGuiones();
+  activateTab('guiones');
+  const node = document.querySelector(`#guionList [data-sid="${id}"]`);
+  if (!node) return toast('Ese guion ya no existe');
   node.classList.add('open');
   node.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }

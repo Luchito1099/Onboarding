@@ -14,7 +14,7 @@ const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const UPLOADS = join(DATA_DIR, 'uploads');
 const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
-const VERSION = '2026-08-13-6';
+const VERSION = '2026-08-13-7';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -184,6 +184,7 @@ const normTask = (b) => ({
   }),
   tips: tips(b.tips),
   procId: Number(b.procId) || null, // proceso detallado que amplía la tarea
+  guionId: Number(b.guionId) || null, // guion de ventas que se usa al ejecutarla
   url: urlOrFail(b.url), // video de cómo ejecutarla
   nota: text(b.nota, 300),
   expected: text(b.expected, 800), // qué debe quedar listo para darla por hecha
@@ -217,6 +218,7 @@ const normProceso = (b) => ({
   steps: strList(b.steps, 30, 300),
   tips: tips(b.tips),
   vids: normVids(b.vids),
+  guionId: Number(b.guionId) || null, // guion de ventas que se usa en este proceso
 });
 
 const normProducto = (b) => ({

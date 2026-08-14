@@ -40,6 +40,8 @@ Cada guion es un **caso** ("Cliente no respondió al mensaje del adelanto") y co
 - **Qué puede preguntar y qué responder** — una tarjeta por objeción o pregunta, con la respuesta literal y una nota interna (*Para ti*) que no se copia.
 - **Cómo cerrar** y **recordatorios**.
 
+Los guiones se escriben **sólo en esta pestaña**. Desde una tarea del runbook o desde un proceso se elige cuál aplica (campo *Guion de ventas*), y aparece un botón que lleva al caso ya abierto — así el guion vive en un único sitio y se referencia desde donde haga falta.
+
 Cada respuesta tiene su botón **Copiar**, y hay uno para el guion completo. Al copiar se convierte al formato de WhatsApp: `**negrita**` sale como `*negrita*`. El buscador de arriba filtra por caso, pregunta o cualquier palabra del texto y abre directamente el caso encontrado — pensado para usarlo en mitad de una llamada.
 
 ## Estructura de una tarea del runbook
