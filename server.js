@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, extname, normalize, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -13,15 +13,29 @@ const PUBLIC = join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const UPLOADS = join(DATA_DIR, 'uploads');
+const BACKUPS = join(DATA_DIR, 'backups');
 const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
-const VERSION = '2026-08-13-9';
+const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
+const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
+const VERSION = '2026-08-14-1';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
 mkdirSync(UPLOADS, { recursive: true });
+mkdirSync(BACKUPS, { recursive: true });
 const DB_FILE = join(DATA_DIR, 'nova.db');
-const BASE_NUEVA = !existsSync(DB_FILE); // si es nueva, el volumen no persistió
+const BASE_NUEVA = !existsSync(DB_FILE); // si es nueva, o es la primera vez o el volumen no persistió
+
+// Seguro de producción: con REQUIRE_DATA=1 la app se niega a arrancar si no encuentra la base,
+// en vez de crear una vacía y hacer creer que el contenido se borró.
+if (REQUIRE_DATA && BASE_NUEVA) {
+  console.error(`[FATAL] REQUIRE_DATA está activado y no existe ${DB_FILE}.`);
+  console.error('[FATAL] Casi seguro que el volumen persistente no está montado en ' + DATA_DIR + '.');
+  console.error('[FATAL] No se arranca para no crear una base vacía encima. Revisa el volumen y vuelve a desplegar.');
+  process.exit(1);
+}
+
 const db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
@@ -51,7 +65,11 @@ CREATE TABLE IF NOT EXISTS guiones(
 CREATE TABLE IF NOT EXISTS dudas(
   id INTEGER PRIMARY KEY, created TEXT, autor TEXT, texto TEXT, url TEXT DEFAULT '',
   estado TEXT DEFAULT 'abierta', respuesta TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
 `);
+
+const meta = (k) => db.prepare('SELECT v FROM meta WHERE k=?').get(k)?.v;
+const setMeta = (k, v) => db.prepare('INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v').run(k, String(v));
 
 // Migraciones sobre bases que ya existían.
 const columnas = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
@@ -60,8 +78,12 @@ addCol('media', 'nota', "TEXT DEFAULT ''");
 addCol('media', 'ord', 'INTEGER DEFAULT 0');
 
 const count = (t) => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
+
+// El contenido de ejemplo se inserta UNA sola vez en la vida de la base. Si el equipo
+// borra todas las tareas, un reinicio no se las devuelve: lo borrado, borrado se queda.
+const YA_SEMBRADA = meta('sembrada') === '1';
 const seed = (t, sql, rows) => {
-  if (count(t)) return;
+  if (YA_SEMBRADA || count(t)) return;
   const st = db.prepare(sql);
   rows.forEach((args) => st.run(...args));
 };
@@ -73,6 +95,12 @@ seed('products', 'INSERT INTO products(id,ord,data) VALUES(?,?,?)', PRODUCTS.map
 seed('ejemplos', 'INSERT INTO ejemplos(ord,data) VALUES(?,?)', EJEMPLOS.map((e, i) => [i, JSON.stringify(e)]));
 seed('infos', 'INSERT INTO infos(ord,data) VALUES(?,?)', INFOS.map((x, i) => [i, JSON.stringify(x)]));
 seed('guiones', 'INSERT INTO guiones(ord,data) VALUES(?,?)', GUIONES.map((g, i) => [i, JSON.stringify(g)]));
+if (!YA_SEMBRADA) {
+  setMeta('sembrada', '1');
+  if (!meta('creada')) setMeta('creada', new Date().toISOString());
+}
+setMeta('ultimo_arranque', new Date().toISOString());
+setMeta('version', VERSION);
 
 /* ================= ESTADO ================= */
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
@@ -549,6 +577,30 @@ function restaurar(b) {
   }
 }
 
+// Instantáneas automáticas dentro del volumen: protegen de borrados accidentales y de
+// restauraciones equivocadas. No sustituyen a bajarse la copia: si el volumen se pierde,
+// estas se pierden con él.
+function snapshot(motivo) {
+  try {
+    if (!TABLAS.reduce((n, t) => n + count(t), 0)) return null;
+    const sello = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const name = `${sello}-${motivo}.json`;
+    writeFileSync(join(BACKUPS, name), JSON.stringify(backupJSON()));
+    const previas = readdirSync(BACKUPS).filter((f) => f.endsWith('.json')).sort();
+    for (const f of previas.slice(0, Math.max(0, previas.length - MAX_SNAPS))) rmSync(join(BACKUPS, f), { force: true });
+    return name;
+  } catch (err) {
+    console.error('No se pudo crear la instantánea:', err.message);
+    return null;
+  }
+}
+
+const listarSnapshots = () => readdirSync(BACKUPS).filter((f) => f.endsWith('.json')).sort().reverse()
+  .map((name) => {
+    const st = statSync(join(BACKUPS, name));
+    return { name, size: st.size, at: st.mtimeMs };
+  });
+
 // Lector de ZIP mínimo, para poder devolver una copia completa (contenido + archivos).
 function unzip(buf) {
   const out = {};
@@ -618,11 +670,33 @@ async function api(request, res, path) {
     return res.end(JSON.stringify(datos, null, 2));
   }
 
+  if (ent === 'backups' && M === 'GET') {
+    if (!id) return json(res, 200, { backups: listarSnapshots() });
+    const name = basename(id);
+    if (!/^[\w.-]+\.json$/.test(name) || !existsSync(join(BACKUPS, name))) throw new HttpError(404, 'No existe esa instantánea');
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': `attachment; filename="${name}"` });
+    return res.end(readFileSync(join(BACKUPS, name)));
+  }
+
   if (ent === 'restore' && M === 'POST') {
     const tipo = String(request.headers['content-type'] || '').split(';')[0].trim();
     const raw = await readRaw(request, Math.max(MAX_MB, 200) * 1024 * 1024);
     if (!raw.length) throw new HttpError(400, 'No llegó ningún archivo');
     let restaurados = 0;
+    // Antes de tocar nada se guarda cómo estaba, por si la restauración era la equivocada.
+    const previa = snapshot('antes-de-restaurar');
+
+    // Restaurar una instantánea del propio servidor: { "snapshot": "…json" }
+    if (tipo === 'application/json') {
+      let posible = null;
+      try { posible = JSON.parse(raw.toString('utf8')); } catch { /* se valida abajo */ }
+      if (posible && typeof posible.snapshot === 'string') {
+        const name = basename(posible.snapshot);
+        if (!/^[\w.-]+\.json$/.test(name) || !existsSync(join(BACKUPS, name))) throw new HttpError(404, 'No existe esa instantánea');
+        restaurar(JSON.parse(readFileSync(join(BACKUPS, name), 'utf8')));
+        return json(res, 200, { ok: true, archivos: 0, previa });
+      }
+    }
     if (tipo === 'application/zip' || raw.readUInt32LE(0) === 0x04034b50) {
       const files = unzip(raw);
       const contenido = files['contenido.json'];
@@ -638,7 +712,7 @@ async function api(request, res, path) {
     } else {
       restaurar(JSON.parse(raw.toString('utf8')));
     }
-    return json(res, 200, { ok: true, archivos: restaurados });
+    return json(res, 200, { ok: true, archivos: restaurados, previa });
   }
 
   // Biblioteca interna: todo lo que ya se subió, para reutilizarlo sin volver a subirlo.
@@ -984,14 +1058,19 @@ const server = createServer(async (request, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`NOVA Onboarding ${VERSION} en http://0.0.0.0:${PORT} · datos en ${DATA_DIR}`);
-  const resumen = TABLAS.map((t) => `${t}=${count(t)}`).join(' ');
   if (BASE_NUEVA) {
     console.warn('[AVISO] No había base de datos en ' + DB_FILE + ': se ha creado una nueva con el contenido inicial.');
-    console.warn('[AVISO] Si esperabas encontrar el contenido del equipo, el volumen persistente no está montado en ' + DATA_DIR + '. Revísalo antes de seguir usándola.');
+    console.warn('[AVISO] Si esperabas encontrar el contenido del equipo, el volumen persistente no está montado en ' + DATA_DIR + '.');
+    console.warn('[AVISO] Cuando la app ya tenga contenido real, pon REQUIRE_DATA=1 para que no vuelva a arrancar vacía.');
   } else {
-    console.log('Base existente reutilizada, no se toca el contenido guardado.');
+    console.log(`Base existente reutilizada (creada ${meta('creada') || '¿?'}), no se toca el contenido guardado.`);
   }
-  console.log('Contenido actual: ' + resumen);
+  if (!REQUIRE_DATA) console.warn('[AVISO] REQUIRE_DATA no está activado: si el volumen desaparece, la app arrancaría vacía sin avisar.');
+  console.log('Contenido actual: ' + TABLAS.map((t) => `${t}=${count(t)}`).join(' '));
+  const snap = snapshot('arranque');
+  if (snap) console.log(`Instantánea de seguridad guardada: ${join(BACKUPS, snap)}`);
+  // Una instantánea al día mientras el proceso siga vivo.
+  setInterval(() => snapshot('diaria'), 24 * 60 * 60 * 1000).unref();
 });
 
 for (const sig of ['SIGTERM', 'SIGINT']) {

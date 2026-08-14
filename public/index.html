@@ -768,7 +768,9 @@
               <button class="fbtn solid" id="bkZip" type="button">Descargar copia completa (ZIP)</button>
               <button class="fbtn" id="bkJson" type="button">Sólo el contenido (JSON)</button>
               <button class="fbtn" id="bkRestore" type="button">Restaurar desde una copia</button>
+              <button class="fbtn" id="bkSnaps" type="button">Ver copias automáticas</button>
             </div>
+            <div id="bkList"></div>
             <div class="hint" id="bkInfo"></div>
           </div>
         </section>
@@ -2276,6 +2278,33 @@ async function bajarCopia(ruta, nombre) {
 const hoyISO = () => (S && S.hoy) || 'copia';
 document.getElementById('bkZip').onclick = () => bajarCopia('/api/backup/zip', `nova-copia-${hoyISO()}.zip`);
 document.getElementById('bkJson').onclick = () => bajarCopia('/api/backup', `nova-copia-${hoyISO()}.json`);
+// Instantáneas que el propio servidor guarda en el volumen (arranque, diaria, antes de restaurar).
+document.getElementById('bkSnaps').onclick = async () => {
+  const caja = document.getElementById('bkList');
+  if (caja.dataset.abierto === '1') { caja.innerHTML = ''; caja.dataset.abierto = '0'; return; }
+  try {
+    const { backups } = await api('GET', '/backups');
+    caja.dataset.abierto = '1';
+    if (!backups.length) { caja.innerHTML = emptyBox('Todavía no hay copias automáticas.'); return; }
+    caja.innerHTML = `<div class="audios">${backups.map((b, i) => `
+      <div class="arow" data-i="${i}">
+        <span class="aname">${esc(b.name.replace('.json', '').replace(/-/g, ' ').replace(/^(\d{4}) (\d{2}) (\d{2})T(\d{2}) (\d{2})/, '$3/$2/$1 $4:$5'))}</span>
+        <span class="hint">${Math.max(1, Math.round(b.size / 1024))} KB</span>
+        <button class="fbtn bkGet" type="button">Descargar</button>
+        <button class="fbtn bkPut" type="button">Restaurar</button>
+      </div>`).join('')}</div>`;
+    caja.querySelectorAll('.bkGet').forEach((b, i) => (b.onclick = () => bajarCopia(`/api/backups/${backups[i].name}`, backups[i].name)));
+    caja.querySelectorAll('.bkPut').forEach((b, i) => (b.onclick = async () => {
+      if (!confirm(`Vas a dejar el contenido tal y como estaba en “${backups[i].name}”.\n\nLo de ahora se reemplaza (se guarda una copia previa por si acaso). ¿Seguir?`)) return;
+      try {
+        const r = await api('POST', '/restore', { snapshot: backups[i].name });
+        await reload();
+        toast(`Restaurado${r.previa ? ' · copia previa guardada' : ''}`);
+      } catch (err) { toast(err.message); }
+    }));
+  } catch (err) { toast(err.message); }
+};
+
 document.getElementById('bkRestore').onclick = async () => {
   const f = await pickFile('.zip,.json,application/zip,application/json');
   if (!f) return;

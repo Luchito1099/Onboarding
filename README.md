@@ -120,6 +120,23 @@ Una sola interfaz para escritorio, tablet y móvil:
 
 Las grillas son fluidas (`auto-fill`), el arrastre usa eventos de puntero (funciona con dedo igual que con ratón) y el layout respeta el área segura de los móviles con notch.
 
+## Protección de datos
+
+Reglas que cumple la app, cubiertas por las pruebas de `npm test`:
+
+1. **Actualizar nunca borra.** El contenido de ejemplo se inserta **una sola vez en la vida de la base** (queda marcado en la tabla `meta`). Si el equipo borra todas las tareas, un reinicio **no** se las devuelve.
+2. **Las migraciones sólo añaden.** Nunca hay `DROP TABLE` ni se quitan columnas: una base de una versión anterior se actualiza conservando todo.
+3. **`REQUIRE_DATA=1` es el seguro de producción.** Con esa variable puesta, si al arrancar no encuentra `nova.db` la app **se niega a arrancar** (sale con error, el despliegue se marca como fallido) en vez de crear una base vacía. Es la protección contra un volumen mal montado.
+   > Actívala en Coolify en cuanto la app tenga contenido real. Es la diferencia entre "el deploy falla y lo arreglas" y "la app arranca vacía y parece que se borró todo".
+4. **Instantáneas automáticas** en `DATA_DIR/backups`: una en cada arranque, una al día y una **antes de cada restauración**. Se conservan las últimas 12 (`MAX_BACKUPS`).
+5. **Restaurar es reversible**: antes de sobrescribir se guarda cómo estaba.
+
+Las instantáneas viven en el mismo volumen, así que protegen de borrados y de restauraciones equivocadas, **no** de perder el volumen. Para eso, descarga la copia (abajo) y guárdala fuera.
+
+```bash
+npm test   # 11 pruebas de protección y respaldo
+```
+
 ## Copia de seguridad (importante)
 
 En la pestaña **Información del negocio**, con el modo edición activo, hay un bloque **Copia de seguridad**:
@@ -151,9 +168,10 @@ Actualizar la app **nunca** toca el contenido guardado: el contenido inicial só
 1. **New Resource → Application → Public/Private Repository**, apuntando a este repo.
 2. Build Pack: **Dockerfile**.
 3. **Port**: `3000`.
-4. **Persistent Storage** (imprescindible: aquí viven la base **y los archivos subidos**):
+4. **Persistent Storage** (imprescindible: aquí viven la base, los archivos subidos **y las instantáneas**):
    `Volume Mount` → Destination Path `/data`.
-5. Health check ya viene en el Dockerfile (`/health`).
+5. **Environment Variables** → añade `REQUIRE_DATA=1` en cuanto la app tenga contenido real.
+6. Health check ya viene en el Dockerfile (`/health`).
 
 `GET /health` responde `{"ok":true,"version":"…"}`; esa versión sirve para comprobar de un vistazo si el deploy tomó el último commit.
 
@@ -165,6 +183,8 @@ Variables opcionales:
 | `DATA_DIR` | `/data` | Dónde viven `nova.db` y `uploads/` |
 | `TZ_APP` | `America/Lima` | Zona horaria del corte diario del runbook |
 | `MAX_UPLOAD_MB` | `100` | Tamaño máximo por archivo subido |
+| `REQUIRE_DATA` | — | Ponla a `1` en producción: si no encuentra la base, no arranca |
+| `MAX_BACKUPS` | `12` | Instantáneas automáticas que se conservan |
 
 ## Local
 
@@ -177,8 +197,9 @@ docker compose up --build
 
 ```
 server.js    API + estáticos + archivos subidos + esquema SQLite
-seed.js      Contenido inicial (sólo se inserta si la base está vacía)
+seed.js      Contenido inicial (sólo se inserta una vez, en una base nueva)
 public/      La app (una sola página)
+test/        Pruebas de protección de datos y respaldo (npm test)
 Dockerfile   Imagen para Coolify
 ```
 
@@ -192,7 +213,8 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 | POST | `/api/uploads` | Sube un archivo (cuerpo binario + `content-type`); devuelve `{url,kind,size}` |
 | GET | `/api/library` | Lista los archivos subidos, con tamaño, tipo y si están en uso |
 | GET | `/api/backup` · `/api/backup/zip` | Copia de seguridad: JSON del contenido, o ZIP con contenido + archivos |
-| POST | `/api/restore` | Restaura una copia (cuerpo JSON o ZIP). Reemplaza todo el contenido |
+| POST | `/api/restore` | Restaura una copia (cuerpo JSON o ZIP, o `{"snapshot":"…"}`). Guarda una copia previa |
+| GET | `/api/backups` · `/api/backups/:archivo` | Instantáneas automáticas del volumen: listar y descargar |
 | POST · PUT · DELETE | `/api/guiones[/:id]` | Guiones por caso |
 | POST · PUT · DELETE | `/api/tasks[/:id]` | Alta, edición y borrado de tareas (se ordenan por hora) |
 | PUT | `/api/tasks/:id/done` | `{done}` — marca la tarea del día |

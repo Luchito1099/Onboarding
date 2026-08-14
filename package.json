@@ -6,7 +6,8 @@
   "description": "Onboarding y runbook operativo de Ventas COD — NOVA",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
   },
   "engines": {
     "node": ">=22.5"
