@@ -91,6 +91,40 @@ export const PRODUCTS = [
    argumentos:'Mismo enfoque que la tobillera: soporte y estabilidad, no promesas médicas.'}
 ];
 
+// Guiones por caso: apertura + lo que puede preguntar el cliente y qué responder.
+export const GUIONES = [
+  {title:'Cliente no respondió al mensaje del adelanto',tag:'Provincia',when:'Pedido de provincia · ya se le envió la info del adelanto y no contesta',
+   apertura:'Hola [nombre], ¿qué tal? Te saluda [asesor] de Nova Shop.\n\nTe estoy llamando por el pedido que registraste con nosotros de [producto]. Hace un momento te enviamos la información para realizar el adelanto de S/30 y poder despachar tu pedido.\n\nQuería confirmar si **llegaste a realizar el adelanto**, para poder **alistarlo y enviarlo el día de hoy**.',
+   qas:[
+     {q:'Todavía no lo he hecho',
+      r:'No hay problema. Si deseas que tu pedido salga en el despacho de hoy, puedes realizar el adelanto de S/30 en cualquiera de los medios que te enviamos por WhatsApp. Una vez que me envíes el comprobante, procedemos con el despacho.',
+      nota:'Genera urgencia real, sin presionar demasiado.'},
+     {q:'Lo voy a hacer más tarde',
+      r:'Perfecto, no hay problema. Apenas realices el adelanto, envíame el comprobante por WhatsApp para poder validarlo y dejar tu pedido listo para despacho.',
+      nota:''},
+     {q:'¿Y cuándo pago el resto?',
+      r:'El adelanto es de S/30 para poder despachar tu pedido. El saldo restante lo cancelas cuando el pedido llegue a la agencia de destino. Nosotros te avisamos cuando esté disponible y, una vez realizado el pago del saldo, te brindamos tu clave de cuatro dígitos para que puedas retirarlo.',
+      nota:'Explícalo de forma muy sencilla, sin tecnicismos.'}
+   ],
+   cierre:'Perfecto [nombre], quedo atento a tu comprobante para dejar el pedido listo. Cualquier cosa me escribes por WhatsApp.',
+   tips:[
+     {t:'alert',x:'Sin adelanto confirmado no se genera la guía.'},
+     {t:'info',x:'Si no contesta la llamada, déjale el mismo texto de la apertura por WhatsApp.'}
+   ]},
+  {title:'Cliente dice que está caro',tag:'Objeción: precio',when:'En cualquier conversación, antes de cerrar',
+   apertura:'Te entiendo. Justo lo bueno es que es **pago contra entrega**: pagas recién cuando lo recibes en tu puerta, sin riesgo.',
+   qas:[
+     {q:'Igual me parece caro',
+      r:'Lo entiendo. Si llevas el pack de 2 te sale más económico por unidad y te queda uno de repuesto. ¿Te muestro los precios?',
+      nota:'No defiendas el precio de frente: cambia el foco al riesgo cero y ofrece el pack.'},
+     {q:'¿No hay descuento?',
+      r:'El precio ya está con el descuento de la promoción. Lo que sí puedo hacer es darte el pack de 2 al precio promocional, que te sale mejor por unidad.',
+      nota:'Nunca inventes descuentos fuera de la lista de packs.'}
+   ],
+   cierre:'¿A qué distrito te lo envío?',
+   tips:[{t:'info',x:'Cierra siempre con una pregunta que haga avanzar el pedido.'}]}
+];
+
 export const INFOS = [
   {title:'Qué vendemos y a quién',tag:'Negocio',
    body:'NOVAFLEX® vende soportes de compresión (tobillera, rodillera) por pago contra entrega en Lima y provincias.\n\nEl cliente típico llega por anuncio, pregunta por WhatsApp y decide en la misma conversación. Nadie paga por adelantado en Lima: paga cuando el producto llega a su puerta.',

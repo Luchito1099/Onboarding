@@ -1,11 +1,11 @@
 import { createServer } from 'node:http';
-import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { join, extname, normalize, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { TASKS, VIDEOS, CHECKLIST, PROCESOS, PRODUCTS, EJEMPLOS, INFOS } from './seed.js';
+import { TASKS, VIDEOS, CHECKLIST, PROCESOS, PRODUCTS, EJEMPLOS, INFOS, GUIONES } from './seed.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(ROOT, 'public');
@@ -14,7 +14,7 @@ const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const UPLOADS = join(DATA_DIR, 'uploads');
 const TZ = process.env.TZ_APP || 'America/Lima';
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
-const VERSION = '2026-08-13-5';
+const VERSION = '2026-08-13-6';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS attach(
   title TEXT, url TEXT NOT NULL, ord INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS infos(
   id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS guiones(
+  id INTEGER PRIMARY KEY, ord INTEGER, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS dudas(
   id INTEGER PRIMARY KEY, created TEXT, autor TEXT, texto TEXT, url TEXT DEFAULT '',
   estado TEXT DEFAULT 'abierta', respuesta TEXT DEFAULT '');
@@ -61,6 +63,7 @@ seed('procesos', 'INSERT INTO procesos(ord,data) VALUES(?,?)', PROCESOS.map((p, 
 seed('products', 'INSERT INTO products(id,ord,data) VALUES(?,?,?)', PRODUCTS.map((p, i) => [p.id, i, JSON.stringify(p)]));
 seed('ejemplos', 'INSERT INTO ejemplos(ord,data) VALUES(?,?)', EJEMPLOS.map((e, i) => [i, JSON.stringify(e)]));
 seed('infos', 'INSERT INTO infos(ord,data) VALUES(?,?)', INFOS.map((x, i) => [i, JSON.stringify(x)]));
+seed('guiones', 'INSERT INTO guiones(ord,data) VALUES(?,?)', GUIONES.map((g, i) => [i, JSON.stringify(g)]));
 
 /* ================= ESTADO ================= */
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
@@ -118,6 +121,8 @@ function getState() {
       })),
     infos: db.prepare('SELECT id,data FROM infos ORDER BY ord').all()
       .map((r) => ({ id: r.id, ...JSON.parse(r.data) })),
+    guiones: db.prepare('SELECT id,data FROM guiones ORDER BY ord').all()
+      .map((r) => ({ id: r.id, ...JSON.parse(r.data) })),
     dudas: db.prepare('SELECT id,created,autor,texto,url,estado,respuesta FROM dudas ORDER BY id DESC').all(),
   };
 }
@@ -172,7 +177,16 @@ const normTask = (b) => ({
   title: req(b.title, 160, 'el título'),
   desc: text(b.desc, 1500),
   steps: strList(b.steps, 30, 300),
+  // Qué hacer según cómo salga la tarea: ok / a medias / mal.
+  outcomes: objList(b.outcomes, 12, (o) => {
+    const t = str(o?.t, 200), r = text(o?.r, 900);
+    return t || r ? { k: oneOf(o?.k, ['ok', 'warn', 'bad'], 'ok'), t, r } : null;
+  }),
   tips: tips(b.tips),
+  procId: Number(b.procId) || null, // proceso detallado que amplía la tarea
+  url: urlOrFail(b.url), // video de cómo ejecutarla
+  nota: text(b.nota, 300),
+  expected: text(b.expected, 800), // qué debe quedar listo para darla por hecha
 });
 
 const normVideo = (b) => ({
@@ -249,6 +263,20 @@ const normEjemplo = (b) => {
   }
   return e;
 };
+
+// Guion de un caso: apertura + preguntas del cliente con su respuesta + cierre.
+const normGuion = (b) => ({
+  title: req(b.title, 160, 'el título del caso'),
+  tag: str(b.tag, 40),
+  when: str(b.when, 160),
+  apertura: text(b.apertura, 2500),
+  qas: objList(b.qas, 30, (x) => {
+    const q = text(x?.q, 300), r = text(x?.r, 2000), nota = text(x?.nota, 400);
+    return q || r ? { q, r, nota } : null;
+  }),
+  cierre: text(b.cierre, 1200),
+  tips: tips(b.tips),
+});
 
 const normInfo = (b) => ({
   title: req(b.title, 160, 'el título'),
@@ -345,12 +373,42 @@ async function handleUpload(request, res) {
   return json(res, 201, { url: '/uploads/' + name, kind, size: buf.length });
 }
 
-// Borra el archivo físico cuando se quita la referencia (si es un archivo nuestro).
-const dropUpload = async (url) => {
+// Un mismo archivo puede estar reutilizado desde la biblioteca en varios sitios,
+// así que sólo se borra del disco cuando ya no queda ninguna referencia.
+const REF_COLS = [['videos', 'url'], ['media', 'url'], ['attach', 'url'], ['dudas', 'url']];
+const REF_JSON = ['procesos', 'tasks'];
+function urlEnUso(url) {
+  for (const [t, col] of REF_COLS) if (db.prepare(`SELECT 1 FROM ${t} WHERE ${col}=? LIMIT 1`).get(url)) return true;
+  for (const t of REF_JSON) if (db.prepare(`SELECT 1 FROM ${t} WHERE instr(data, ?) > 0 LIMIT 1`).get(url)) return true;
+  return false;
+}
+// Llamar SIEMPRE después de haber quitado la referencia en la base.
+const gcUpload = async (url) => {
   const m = /^\/uploads\/([\w.-]+)$/.exec(String(url || ''));
-  if (!m) return;
+  if (!m || urlEnUso(url)) return;
   await unlink(join(UPLOADS, basename(m[1]))).catch(() => {});
 };
+
+async function listarBiblioteca() {
+  const names = await readdir(UPLOADS).catch(() => []);
+  const files = [];
+  for (const name of names) {
+    if (!/^[\w.-]+$/.test(name)) continue;
+    const mime = MIME_BY_EXT[extname(name)];
+    if (!mime) continue;
+    const st = await stat(join(UPLOADS, name)).catch(() => null);
+    if (!st) continue;
+    const url = '/uploads/' + name;
+    files.push({
+      url,
+      kind: mime.startsWith('image/') ? 'image' : mime.startsWith('audio/') ? 'audio' : 'video',
+      size: st.size,
+      at: st.mtimeMs,
+      enUso: urlEnUso(url),
+    });
+  }
+  return files.sort((a, b) => b.at - a.at).slice(0, 300);
+}
 
 /* ================= HTTP ================= */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png' };
@@ -375,6 +433,8 @@ async function api(request, res, path) {
   const M = request.method;
 
   if (ent === 'uploads' && M === 'POST') return handleUpload(request, res);
+  // Biblioteca interna: todo lo que ya se subió, para reutilizarlo sin volver a subirlo.
+  if (ent === 'library' && M === 'GET' && !id) return json(res, 200, { files: await listarBiblioteca() });
 
   const body = M === 'GET' ? {} : await readBody(request);
 
@@ -393,12 +453,18 @@ async function api(request, res, path) {
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      must('tasks', id);
+      const old = JSON.parse(must('tasks', id).data);
       db.prepare('UPDATE tasks SET data=? WHERE id=?').run(JSON.stringify(normTask(body)), Number(id));
       reorderTasksByTime();
+      await gcUpload(old.url);
       return ok(res);
     }
-    if (M === 'DELETE' && id && !sub) { removeRow('tasks', id); return ok(res); }
+    if (M === 'DELETE' && id && !sub) {
+      const old = JSON.parse(must('tasks', id).data);
+      removeRow('tasks', id);
+      await gcUpload(old.url);
+      return ok(res);
+    }
   }
 
   /* ---------- VIDEOS DE ONBOARDING ---------- */
@@ -413,21 +479,22 @@ async function api(request, res, path) {
     if (M === 'PUT' && id && sub === 'url') {
       const old = must('videos', id);
       const url = urlOrFail(body.url);
-      if (old.url !== url) await dropUpload(old.url);
       db.prepare('UPDATE videos SET url=? WHERE id=?').run(url, Number(id));
+      if (old.url !== url) await gcUpload(old.url);
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      must('videos', id);
+      const old = must('videos', id);
       const v = normVideo(body);
       db.prepare('UPDATE videos SET title=?,type=?,dur=?,guion=?,url=? WHERE id=?')
         .run(v.title, v.type, v.dur, v.guion, v.url, Number(id));
+      if (old.url !== v.url) await gcUpload(old.url);
       return ok(res);
     }
     if (M === 'DELETE' && id && !sub) {
       const old = must('videos', id);
-      await dropUpload(old.url);
       removeRow('videos', id);
+      await gcUpload(old.url);
       return ok(res);
     }
   }
@@ -482,24 +549,27 @@ async function api(request, res, path) {
       while (vids.length < n) vids.push({ url: '', nota: '' });
       const old = vids[n]?.url;
       const next = { url, nota: text(body.nota, 400) };
-      if (old && old !== url) await dropUpload(old);
       if (n < vids.length) vids[n] = next; else vids.push(next);
       data.vids = trimVids(vids);
       db.prepare('UPDATE procesos SET data=?, url=? WHERE id=?')
         .run(JSON.stringify(data), data.vids[0]?.url || '', Number(id));
+      if (old && old !== url) await gcUpload(old);
       return ok(res);
     }
     if (M === 'PUT' && id && !sub) {
-      must('procesos', id);
+      const row = must('procesos', id);
+      const antes = procVids(JSON.parse(row.data), row.url).map((v) => v.url);
       const p = normProceso(body);
       db.prepare('UPDATE procesos SET data=?, url=? WHERE id=?')
         .run(JSON.stringify(p), p.vids[0]?.url || '', Number(id));
+      for (const u of antes) await gcUpload(u);
       return ok(res);
     }
     if (M === 'DELETE' && id && !sub) {
       const row = must('procesos', id);
-      for (const v of procVids(JSON.parse(row.data), row.url)) await dropUpload(v.url);
+      const antes = procVids(JSON.parse(row.data), row.url).map((v) => v.url);
       removeRow('procesos', id);
+      for (const u of antes) await gcUpload(u);
       return ok(res);
     }
   }
@@ -529,17 +599,18 @@ async function api(request, res, path) {
     }
     if (M === 'DELETE' && id && !sub) {
       must('products', id);
-      for (const m of db.prepare('SELECT url FROM media WHERE product_id=?').all(id)) await dropUpload(m.url);
+      const urls = db.prepare('SELECT url FROM media WHERE product_id=?').all(id).map((m) => m.url);
       db.prepare('DELETE FROM media WHERE product_id=?').run(id);
       db.prepare('DELETE FROM products WHERE id=?').run(id);
+      for (const u of urls) await gcUpload(u);
       return ok(res);
     }
   }
 
   if (ent === 'media' && M === 'DELETE' && id) {
     const row = must('media', id);
-    await dropUpload(row.url);
     db.prepare('DELETE FROM media WHERE id=?').run(Number(id));
+    await gcUpload(row.url);
     return ok(res);
   }
 
@@ -567,18 +638,34 @@ async function api(request, res, path) {
     }
     if (M === 'DELETE' && id && !sub) {
       must('ejemplos', id);
-      for (const a of db.prepare('SELECT url FROM attach WHERE owner=? AND owner_id=?').all('ejemplo', String(id))) await dropUpload(a.url);
+      const urls = db.prepare('SELECT url FROM attach WHERE owner=? AND owner_id=?').all('ejemplo', String(id)).map((a) => a.url);
       db.prepare('DELETE FROM attach WHERE owner=? AND owner_id=?').run('ejemplo', String(id));
       removeRow('ejemplos', id);
+      for (const u of urls) await gcUpload(u);
       return ok(res);
     }
   }
 
   if (ent === 'attach' && M === 'DELETE' && id) {
     const row = must('attach', id);
-    await dropUpload(row.url);
     db.prepare('DELETE FROM attach WHERE id=?').run(Number(id));
+    await gcUpload(row.url);
     return ok(res);
+  }
+
+  /* ---------- GUIONES POR CASO ---------- */
+  if (ent === 'guiones') {
+    if (M === 'PUT' && id === 'order') return json(res, 200, { n: setOrder('guiones', body.ids) });
+    if (M === 'POST' && !id) {
+      const r = db.prepare('INSERT INTO guiones(ord,data) VALUES(?,?)').run(nextOrd('guiones'), JSON.stringify(normGuion(body)));
+      return json(res, 201, { id: Number(r.lastInsertRowid) });
+    }
+    if (M === 'PUT' && id && !sub) {
+      must('guiones', id);
+      db.prepare('UPDATE guiones SET data=? WHERE id=?').run(JSON.stringify(normGuion(body)), Number(id));
+      return ok(res);
+    }
+    if (M === 'DELETE' && id && !sub) { removeRow('guiones', id); return ok(res); }
   }
 
   /* ---------- INFORMACIÓN DEL NEGOCIO ---------- */
@@ -623,8 +710,8 @@ async function api(request, res, path) {
     }
     if (M === 'DELETE' && id && !sub) {
       const row = must('dudas', id);
-      await dropUpload(row.url);
       removeRow('dudas', id);
+      await gcUpload(row.url);
       return ok(res);
     }
   }

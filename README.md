@@ -6,8 +6,9 @@ Node 24 sin dependencias npm + SQLite embebido (`node:sqlite`). Imagen Docker ~8
 ## Qué hace
 
 - **Onboarding** — videos de lanzamiento con su guion. Pegas el link de YouTube o de Google Drive, o subes el archivo.
-- **Runbook diario** — tareas por hora con pasos y tips. El "completado" se resetea solo cada día (zona horaria `TZ_APP`).
+- **Runbook diario** — tareas por hora. Cada una lleva descripción, pasos, **qué hacer según el resultado**, tips, un botón al **proceso detallado**, su **video** y el **resultado esperado**. El "completado" se resetea solo cada día (zona horaria `TZ_APP`).
 - **Procesos** — paso a paso de cada proceso, con **hasta 2 videos, cada uno con su comentario**.
+- **Guiones por caso** — qué decir en cada situación: apertura, preguntas del cliente con su respuesta literal y cierre. Con buscador y botón de copiar.
 - **Fichas de producto** — packs, beneficios, specs, objeciones + imágenes y videos (YouTube o Drive).
 - **Ejemplos reales** — chats y llamadas modelo, con **capturas pegables**, **audio de la llamada** y un **guion en pop-up**.
 - **Información del negocio** — el contexto que hay que saber antes de operar.
@@ -30,6 +31,33 @@ Detalles de comportamiento:
 Los campos de contenido llevan botones **B** / *i* junto a su etiqueta. Selecciona el texto y pulsa el botón, o usa **Ctrl+B** / **Ctrl+I**. Pulsar de nuevo sobre el texto ya formateado quita el formato.
 
 Por debajo se guarda como texto plano con marcadores, `**negrita**` y `_cursiva_`, así que también puedes escribirlos a mano. Al pintar, sólo se convierten esos marcadores y las etiquetas `<b>`, `<i>`, `<u>` y `<br>` que ya traía el contenido original: cualquier otro HTML se escapa y se muestra como texto, de modo que pegar algo en un campo no puede inyectar código en la página.
+
+## Guiones por caso
+
+Cada guion es un **caso** ("Cliente no respondió al mensaje del adelanto") y contiene:
+
+- **Cómo abrir** — lo que se dice primero, tal cual.
+- **Qué puede preguntar y qué responder** — una tarjeta por objeción o pregunta, con la respuesta literal y una nota interna (*Para ti*) que no se copia.
+- **Cómo cerrar** y **recordatorios**.
+
+Cada respuesta tiene su botón **Copiar**, y hay uno para el guion completo. Al copiar se convierte al formato de WhatsApp: `**negrita**` sale como `*negrita*`. El buscador de arriba filtra por caso, pregunta o cualquier palabra del texto y abre directamente el caso encontrado — pensado para usarlo en mitad de una llamada.
+
+## Estructura de una tarea del runbook
+
+Además de descripción, pasos y tips, cada tarea puede llevar:
+
+- **¿Qué hacer según el resultado?** — escenarios marcados como salió bien / a medias / no salió, cada uno con qué hacer entonces.
+- **Proceso detallado** — botón que abre el proceso completo en su pestaña, ya desplegado.
+- **Video** de cómo ejecutarla, con comentario.
+- **Resultado esperado** — qué debe quedar terminado para poder marcarla como completada.
+
+Todo es opcional: una tarea sin esos campos se ve igual que antes.
+
+## Biblioteca interna
+
+Todo archivo subido queda disponible para reutilizarlo desde el botón **Biblioteca** —en productos, procesos, videos de onboarding, capturas y audios— sin volver a subirlo. La biblioteca marca cuáles están en uso.
+
+Un archivo sólo se borra del disco cuando **ya no queda ninguna referencia** a él: quitarlo de un sitio no lo elimina si otro lo sigue usando.
 
 ## Videos: YouTube, Google Drive o archivo
 
@@ -119,6 +147,8 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 |---|---|---|
 | GET | `/api/state` | Todo el contenido y el progreso |
 | POST | `/api/uploads` | Sube un archivo (cuerpo binario + `content-type`); devuelve `{url,kind,size}` |
+| GET | `/api/library` | Lista los archivos subidos, con tamaño, tipo y si están en uso |
+| POST · PUT · DELETE | `/api/guiones[/:id]` | Guiones por caso |
 | POST · PUT · DELETE | `/api/tasks[/:id]` | Alta, edición y borrado de tareas (se ordenan por hora) |
 | PUT | `/api/tasks/:id/done` | `{done}` — marca la tarea del día |
 | POST · PUT · DELETE | `/api/videos[/:id]` | Alta, edición y borrado de videos de onboarding |
@@ -137,7 +167,7 @@ Todo el contenido es editable por API. `:id` es numérico salvo en productos, do
 | POST · PUT · DELETE | `/api/dudas[/:id]` | Dudas de soporte |
 | PUT | `/api/dudas/:id/respuesta` | `{respuesta}` — responde y marca resuelta (vacía, reabre) |
 | PUT | `/api/dudas/:id/estado` | `{estado}` — `abierta` o `resuelta` |
-| PUT | `/api/{videos,procesos,products,ejemplos,infos,checklist}/order` | `{ids}` — guarda el orden del arrastre |
+| PUT | `/api/{videos,procesos,products,ejemplos,infos,guiones,checklist}/order` | `{ids}` — guarda el orden del arrastre |
 
 Los textos se validan y recortan en el servidor: los campos obligatorios que llegan vacíos devuelven `400`, los links que no son `http(s)` (ni `/uploads/…`) se rechazan, las filas vacías de listas se descartan y los formatos de archivo no admitidos devuelven `415`.
 
