@@ -20,7 +20,7 @@ const MAX_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 const MAX_SNAPS = Number(process.env.MAX_BACKUPS || 12);
 const REQUIRE_DATA = /^(1|true|si|sí|yes)$/i.test(process.env.REQUIRE_DATA || '');
 const ALLOW_EPHEMERAL = /^(1|true|si|sí|yes)$/i.test(process.env.ALLOW_EPHEMERAL || '');
-const VERSION = '2026-08-14-7';
+const VERSION = '2026-08-14-8';
 
 /* ================= DB ================= */
 mkdirSync(DATA_DIR, { recursive: true });
@@ -681,12 +681,13 @@ async function api(request, res, path) {
   /* ---------- PRUEBA DE CONEXIÓN A POSTGRES ---------- */
   // Sólo comprueba que se puede conectar con las variables de entorno; no toca ningún dato.
   if (ent === 'pgtest' && M === 'GET') {
-    const cs = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
-    const host = process.env.PGHOST || process.env.POSTGRES_HOST || '';
+    const E = process.env;
+    const cs = E.DATABASE_URL || E.POSTGRES_URL || '';
+    const host = E.PGHOST || E.POSTGRES_HOST || E.DB_HOST || '';
     if (!cs && !host) {
       return json(res, 200, {
         ok: false, configurado: false,
-        error: 'Faltan las variables de conexión. Define DATABASE_URL (postgres://usuario:clave@host:5432/base) o el juego PGHOST / PGPORT / PGUSER / PGPASSWORD / PGDATABASE.',
+        error: 'Faltan las variables de conexión. Define DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME, o DATABASE_URL (postgres://usuario:clave@host:5432/base).',
       });
     }
     let pg;
@@ -698,12 +699,12 @@ async function api(request, res, path) {
       connectionTimeoutMillis: 6000,
     } : {
       host,
-      port: Number(process.env.PGPORT || process.env.POSTGRES_PORT || 5432),
-      user: process.env.PGUSER || process.env.POSTGRES_USER || 'postgres',
-      password: process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD || '',
-      database: process.env.PGDATABASE || process.env.POSTGRES_DB || 'postgres',
+      port: Number(E.PGPORT || E.POSTGRES_PORT || E.DB_PORT || 5432),
+      user: E.PGUSER || E.POSTGRES_USER || E.DB_USER || 'postgres',
+      password: E.PGPASSWORD || E.POSTGRES_PASSWORD || E.DB_PASSWORD || '',
+      database: E.PGDATABASE || E.POSTGRES_DB || E.DB_NAME || 'postgres',
       connectionTimeoutMillis: 6000,
-      ssl: /^(1|true)$/i.test(process.env.PGSSL || '') ? { rejectUnauthorized: false } : undefined,
+      ssl: /^(1|true)$/i.test(E.PGSSL || E.DB_SSL || '') ? { rejectUnauthorized: false } : undefined,
     });
     try {
       await client.connect();

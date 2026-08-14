@@ -172,7 +172,11 @@ Actualizar la app **nunca** toca el contenido guardado: el contenido inicial só
 
 La app sigue guardando en SQLite, pero ya trae el cliente de PostgreSQL y una prueba de conexión para preparar la migración:
 
-1. En Coolify, define `DATABASE_URL` (`postgres://usuario:clave@host:5432/base`) **o** el juego `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` (si el servidor exige TLS, añade `PGSSL=1`).
+1. En Coolify, define las variables de conexión. Se aceptan tres formatos, en este orden de preferencia:
+   - `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` (el formato del equipo),
+   - `DATABASE_URL` = `postgres://usuario:clave@host:5432/base`,
+   - o el juego estándar `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`.
+   Si el servidor exige TLS, añade `DB_SSL=1` (o `PGSSL=1`).
 2. En la app: **Información del negocio → Editar → Probar conexión a PostgreSQL**. Un pop-up dice "Conexión exitosa" (con la base, la versión y la latencia) o el motivo del fallo.
 3. `GET /api/pgtest` hace lo mismo por API. No toca ningún dato: sólo conecta y pregunta la versión.
 

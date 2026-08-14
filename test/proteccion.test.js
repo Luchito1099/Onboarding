@@ -315,17 +315,18 @@ test('el arranque avisa del volumen en el log y en /health', async () => {
 
 /* ---------- 8c. prueba de conexión a PostgreSQL ---------- */
 test('sin variables de Postgres, /api/pgtest lo dice claro y no rompe nada', async () => {
-  const { proc } = await arranca({ DATABASE_URL: '', POSTGRES_URL: '', PGHOST: '', POSTGRES_HOST: '' });
+  const { proc } = await arranca({ DATABASE_URL: '', POSTGRES_URL: '', PGHOST: '', POSTGRES_HOST: '', DB_HOST: '' });
   const r = await api('GET', '/api/pgtest');
   await para(proc);
   assert.equal(r.status, 200);
   assert.equal(r.data.ok, false);
   assert.equal(r.data.configurado, false, 'distingue "no configurado" de "falló"');
-  assert.match(r.data.error, /DATABASE_URL/, 'explica qué variables definir');
+  assert.match(r.data.error, /DB_HOST/, 'explica qué variables definir, en el formato DB_*');
 });
 
 test('con Postgres inalcanzable, /api/pgtest devuelve el error sin colgarse', async () => {
-  const { proc } = await arranca({ PGHOST: '127.0.0.1', PGPORT: '9', PGUSER: 'x', PGPASSWORD: 'x', PGDATABASE: 'x' });
+  // el mismo formato de variables que usa el equipo: DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
+  const { proc } = await arranca({ DB_HOST: '127.0.0.1', DB_PORT: '9', DB_USER: 'x', DB_PASSWORD: 'x', DB_NAME: 'onboarding' });
   const t0 = Date.now();
   const r = await api('GET', '/api/pgtest');
   const tardo = Date.now() - t0;
@@ -333,7 +334,7 @@ test('con Postgres inalcanzable, /api/pgtest devuelve el error sin colgarse', as
   await para(proc);
   assert.equal(r.status, 200);
   assert.equal(r.data.ok, false);
-  assert.equal(r.data.configurado, true);
+  assert.equal(r.data.configurado, true, 'con DB_HOST puesto, cuenta como configurado');
   assert.ok(r.data.error, 'trae el motivo del fallo');
   assert.ok(tardo < 10000, `responde en un tiempo razonable (${tardo} ms)`);
   assert.equal(salud.data.ok, true, 'y la app sigue viva después del intento');
